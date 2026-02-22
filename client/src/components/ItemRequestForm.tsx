@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { apiFetch } from '../utils/api'
+import { showNotification } from '../utils/notifications'
 
 interface ItemRequestFormProps {
   currentUser: { role: string; name: string }
@@ -21,7 +22,10 @@ const ItemRequestForm: React.FC<ItemRequestFormProps> = ({ currentUser, onReques
         if (res.ok) {
           const items = await res.json()
           const mapped = (Array.isArray(items) ? items : [])
-            .filter((item: any) => item.available > 0)
+            .filter((item: any) => 
+              item.available > 0 && 
+              item.status !== 'Under Maintenance' && item.status !== 'Damaged'
+            )
             .map((item: any) => ({
               id: String(item.id),
               name: item.name,
@@ -81,12 +85,12 @@ const ItemRequestForm: React.FC<ItemRequestFormProps> = ({ currentUser, onReques
   const submitRequest = async () => {
     try {
       if (selectedItems.length === 0) {
-        alert('Please select at least one item.')
+        showNotification('Please select at least one item.', 'error')
         return
       }
 
       if (!location.trim()) {
-        alert('Please enter a location.')
+        showNotification('Please enter a location.', 'error')
         return
       }
 
@@ -117,7 +121,7 @@ const ItemRequestForm: React.FC<ItemRequestFormProps> = ({ currentUser, onReques
         }
       }
 
-      alert('Request submitted and inventory reserved!')
+      showNotification('Request submitted and inventory reserved!', 'success')
       
       // Reset form
       setSelectedItems([])
@@ -130,7 +134,7 @@ const ItemRequestForm: React.FC<ItemRequestFormProps> = ({ currentUser, onReques
       }
     } catch (err: any) {
       console.error('Submit error:', err)
-      alert(err.message || 'Failed to submit request')
+      showNotification(err.message || 'Failed to submit request', 'error')
     }
   }
 

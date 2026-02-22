@@ -1,12 +1,35 @@
-import React, { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 import AdminTopBar from '../components/AdminTopBar'
+import { apiFetch, getApiBaseUrl } from '../utils/api'
+import { showNotification } from '../utils/notifications'
 
 export default function Reports() {
   const { user: currentUser } = useAuth()
+  const location = useLocation()
   const [selectedReportType, setSelectedReportType] = useState('inventory')
   const [dateRange, setDateRange] = useState('last30days')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
+  const [reportData, setReportData] = useState<any[]>([])
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [isDownloadingExcel, setIsDownloadingExcel] = useState(false)
+  const [reportGenerated, setReportGenerated] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  // Reset loading when navigating to this page
+  useEffect(() => {
+    setLoading(true)
+    // Simulate initial load time
+    const timeoutId = setTimeout(() => {
+      setLoading(false)
+    }, 500)
+    
+    return () => clearTimeout(timeoutId)
+  }, [location.pathname])
 
   const reportTypes = [
     { id: 'inventory', name: 'Inventory Report', icon: 'bi-box' },
@@ -22,67 +45,321 @@ export default function Reports() {
     { id: 'custom', name: 'Custom Range' }
   ]
 
-  const generateReport = () => {
-    // This would integrate with your backend API
-    // Show success notification
-    const notification = document.createElement('div')
-    notification.className = 'alert alert-success notification-toast'
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 9999;
-      min-width: 300px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      border-radius: 8px;
-      padding: 16px 20px;
-      margin: 0;
-      animation: slideInRight 0.3s ease-out;
-    `
-    notification.innerHTML = `
-      <div class="d-flex align-items-center">
-        <i class="bi bi-check-circle-fill me-2"></i>
-        <span>Report generated successfully!</span>
-        <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
-      </div>
-    `
-    document.body.appendChild(notification)
-    setTimeout(() => {
-      if (notification.parentElement) {
-        notification.remove()
+  const getDateRange = () => {
+    const today = new Date()
+    let startDate: Date
+    let endDate = new Date(today)
+
+    if (dateRange === 'custom') {
+      if (!customStartDate || !customEndDate) {
+        throw new Error('Please select both start and end dates for custom range')
       }
-    }, 5000)
+      startDate = new Date(customStartDate)
+      endDate = new Date(customEndDate)
+    } else if (dateRange === 'last7days') {
+      startDate = new Date(today)
+      startDate.setDate(today.getDate() - 7)
+    } else if (dateRange === 'last30days') {
+      startDate = new Date(today)
+      startDate.setDate(today.getDate() - 30)
+    } else if (dateRange === 'last90days') {
+      startDate = new Date(today)
+      startDate.setDate(today.getDate() - 90)
+    } else {
+      startDate = new Date(today)
+      startDate.setDate(today.getDate() - 30)
+    }
+
+    return {
+      start_date: startDate.toISOString().split('T')[0],
+      end_date: endDate.toISOString().split('T')[0]
+    }
   }
 
-  const downloadReport = () => {
-    // This would trigger a download
-    const notification = document.createElement('div')
-    notification.className = 'alert alert-info notification-toast'
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 9999;
-      min-width: 300px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      border-radius: 8px;
-      padding: 16px 20px;
-      margin: 0;
-      animation: slideInRight 0.3s ease-out;
-    `
-    notification.innerHTML = `
-      <div class="d-flex align-items-center">
-        <i class="bi bi-download me-2"></i>
-        <span>Report download started...</span>
-        <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
-      </div>
-    `
-    document.body.appendChild(notification)
-    setTimeout(() => {
-      if (notification.parentElement) {
-        notification.remove()
+  const generateReport = async () => {
+    try {
+      if (dateRange === 'custom' && (!customStartDate || !customEndDate)) {
+        showNotification('Please select both start and end dates for custom range', 'error')
+        return
       }
-    }, 5000)
+
+      if (dateRange === 'custom' && new Date(customStartDate) > new Date(customEndDate)) {
+        showNotification('Start date must be before end date', 'error')
+        return
+      }
+
+      setIsGenerating(true)
+      setReportGenerated(false)
+      
+      const dateRangeParams = getDateRange()
+      
+      const response = await apiFetch('/api/reports/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          report_type: selectedReportType,
+          ...dateRangeParams
+        })
+      })
+
+      // Check content type before parsing
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`)
+      }
+
+      // Parse JSON response once
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || `Failed to generate report (${response.status})`)
+      }
+
+      // Check if response has success flag
+      if (data.success === false) {
+        throw new Error(data.message || 'Failed to generate report')
+      }
+
+      setReportData(data.data || [])
+      setReportGenerated(true)
+      showNotification('Report generated successfully!', 'success')
+    } catch (error: any) {
+      console.error('Error generating report:', error)
+      showNotification(error.message || 'Failed to generate report. Please try again.', 'error')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const downloadReport = async () => {
+    if (!reportGenerated || reportData.length === 0) {
+      showNotification('Please generate a report first', 'error')
+      return
+    }
+
+    try {
+      setIsDownloading(true)
+      
+      const dateRangeParams = getDateRange()
+      
+      // Use apiFetch pattern to include authentication token
+      // We can't use apiFetch directly because we need to handle blob response, not JSON
+      const token = localStorage.getItem('api_token')
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      
+      const response = await fetch(`${getApiBaseUrl()}/api/reports/download`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          report_type: selectedReportType,
+          ...dateRangeParams
+        })
+      })
+
+      // Check content type - for downloads, it might be application/octet-stream or docx
+      const contentType = response.headers.get('content-type')
+      
+      if (!response.ok) {
+        // If error, try to parse as JSON
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json()
+          const errorMessage = errorData.message || `Failed to download report (${response.status})`
+          
+          // Check for ZipArchive error and provide helpful message
+          if (errorMessage.includes('ZipArchive') || errorMessage.includes('zip extension')) {
+            throw new Error('PHP ZipArchive extension is not enabled. Please contact your administrator to enable the "zip" extension in php.ini and restart Apache.')
+          }
+          
+          throw new Error(errorMessage)
+        } else {
+          const text = await response.text()
+          throw new Error(`Failed to download report: ${text.substring(0, 100)}`)
+        }
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      
+      const reportTypeName = reportTypes.find(t => t.id === selectedReportType)?.name || 'Report'
+      const dateStr = dateRangeParams.start_date.replace(/-/g, '') + '_' + dateRangeParams.end_date.replace(/-/g, '')
+      link.download = `${reportTypeName}_${dateStr}.docx`
+      
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      showNotification('Report downloaded successfully!', 'success')
+    } catch (error: any) {
+      console.error('Error downloading report:', error)
+      showNotification(error.message || 'Failed to download report. Please try again.', 'error')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  const downloadExcelReport = async () => {
+    if (!reportGenerated || reportData.length === 0) {
+      showNotification('Please generate a report first', 'error')
+      return
+    }
+
+    try {
+      setIsDownloadingExcel(true)
+      
+      const dateRangeParams = getDateRange()
+      
+      const token = localStorage.getItem('api_token')
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      
+      const response = await fetch(`${getApiBaseUrl()}/api/reports/download-excel`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          report_type: selectedReportType,
+          ...dateRangeParams
+        })
+      })
+
+      const contentType = response.headers.get('content-type')
+      
+      if (!response.ok) {
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json()
+          const errorMessage = errorData.message || `Failed to download Excel report (${response.status})`
+          
+          if (errorMessage.includes('PhpSpreadsheet') || errorMessage.includes('GD extension')) {
+            throw new Error('PhpSpreadsheet library or GD extension is not installed. Please contact your administrator.')
+          }
+          
+          throw new Error(errorMessage)
+        } else {
+          const text = await response.text()
+          throw new Error(`Failed to download Excel report: ${text.substring(0, 100)}`)
+        }
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      
+      const reportTypeName = reportTypes.find(t => t.id === selectedReportType)?.name || 'Report'
+      const dateStr = dateRangeParams.start_date.replace(/-/g, '') + '_' + dateRangeParams.end_date.replace(/-/g, '')
+      link.download = `${reportTypeName}_${dateStr}.xlsx`
+      
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      showNotification('Excel report downloaded successfully!', 'success')
+    } catch (error: any) {
+      console.error('Error downloading Excel report:', error)
+      showNotification(error.message || 'Failed to download Excel report. Please try again.', 'error')
+    } finally {
+      setIsDownloadingExcel(false)
+    }
+  }
+
+  const getReportColumns = () => {
+    switch (selectedReportType) {
+      case 'inventory':
+        return ['ID', 'Item Name', 'Category', 'Quantity', 'Available', 'Location', 'Status', 'Purchase Price', 'Purchase Date']
+      case 'users':
+        return ['ID', 'Name', 'Email', 'Role', 'Last Login', 'Status']
+      case 'requests':
+        return ['ID', 'Teacher', 'Item', 'Quantity', 'Status', 'Request Date', 'Due Date']
+      case 'costs':
+        return ['ID', 'Item Name', 'Category', 'Quantity', 'Unit Price', 'Total Cost', 'Purchase Date', 'Supplier']
+      default:
+        return []
+    }
+  }
+
+  const formatReportValue = (value: any, column: string) => {
+    if (value === null || value === undefined || value === '') return 'N/A'
+    
+    if (column.includes('Date') || column.includes('date')) {
+      if (typeof value === 'string' && value !== 'N/A') {
+        try {
+          return new Date(value).toLocaleDateString()
+        } catch {
+          return value
+        }
+      }
+      return value
+    }
+    
+    if (column.includes('Price') || column.includes('Cost') || column.includes('price') || column.includes('cost')) {
+      if (typeof value === 'number') {
+        return `₱${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      }
+      return value
+    }
+    
+    return String(value)
+  }
+
+  const getColumnKey = (column: string, row: any) => {
+    // Map column names to backend response keys
+    const columnMap: { [key: string]: string[] } = {
+      'ID': ['id'],
+      'Item Name': ['item_name', 'name'],
+      'Category': ['category'],
+      'Quantity': ['quantity'],
+      'Available': ['available'],
+      'Location': ['location'],
+      'Status': ['status'],
+      'Purchase Price': ['purchase_price', 'unit_price'],
+      'Purchase Date': ['purchase_date'],
+      'Name': ['name'],
+      'Email': ['email'],
+      'Role': ['role'],
+      'Last Login': ['last_login'],
+      'Teacher': ['teacher', 'teacher_name'],
+      'Item': ['item', 'item_name'],
+      'Request Date': ['request_date', 'created_at'],
+      'Due Date': ['due_date'],
+      'Unit Price': ['unit_price', 'purchase_price'],
+      'Total Cost': ['total_cost'],
+      'Supplier': ['supplier']
+    }
+
+    const possibleKeys = columnMap[column] || [column.toLowerCase().replace(/\s+/g, '_')]
+    
+    for (const key of possibleKeys) {
+      if (row[key] !== undefined) {
+        return row[key]
+      }
+    }
+    
+    // Fallback: try to find any key that contains parts of the column name
+    const columnLower = column.toLowerCase().replace(/\s+/g, '_')
+    for (const key in row) {
+      if (key.toLowerCase().includes(columnLower.slice(0, 5)) || columnLower.includes(key.toLowerCase().slice(0, 5))) {
+        return row[key]
+      }
+    }
+    
+    return null
   }
 
   return (
@@ -92,9 +369,22 @@ export default function Reports() {
       <main className="main-content">
         <AdminTopBar 
           searchPlaceholder="Search reports..." 
-          currentUser={currentUser}
+          currentUser={currentUser || undefined}
         />
         
+        {/* Loading overlay - only covers main content, sidebar remains visible */}
+        {loading && (
+          <div className="main-content-loading">
+            <div className="full-screen-spinner">
+              <div className="loading-spinner-large"></div>
+              <p style={{ marginTop: 'var(--space-4)', color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+                Loading reports...
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {!loading && (
         <div className="dashboard-content">
           <div className="dashboard-header">
             <h1 className="dashboard-title">Reports</h1>
@@ -116,7 +406,11 @@ export default function Reports() {
                     <div 
                       key={type.id}
                       className={`report-type-option ${selectedReportType === type.id ? 'selected' : ''}`}
-                      onClick={() => setSelectedReportType(type.id)}
+                      onClick={() => {
+                        setSelectedReportType(type.id)
+                        setReportGenerated(false)
+                        setReportData([])
+                      }}
                     >
                       <i className={type.icon}></i>
                       <span>{type.name}</span>
@@ -136,7 +430,11 @@ export default function Reports() {
                         name="dateRange" 
                         value={range.id}
                         checked={dateRange === range.id}
-                        onChange={(e) => setDateRange(e.target.value)}
+                        onChange={(e) => {
+                          setDateRange(e.target.value)
+                          setReportGenerated(false)
+                          setReportData([])
+                        }}
                       />
                       <span>{range.name}</span>
                     </label>
@@ -151,11 +449,29 @@ export default function Reports() {
                   <div className="custom-date-inputs">
                     <div className="date-input-group">
                       <label>From:</label>
-                      <input type="date" className="form-control" />
+                      <input 
+                        type="date" 
+                        className="form-control" 
+                        value={customStartDate}
+                        onChange={(e) => {
+                          setCustomStartDate(e.target.value)
+                          setReportGenerated(false)
+                          setReportData([])
+                        }}
+                      />
                     </div>
                     <div className="date-input-group">
                       <label>To:</label>
-                      <input type="date" className="form-control" />
+                      <input 
+                        type="date" 
+                        className="form-control" 
+                        value={customEndDate}
+                        onChange={(e) => {
+                          setCustomEndDate(e.target.value)
+                          setReportGenerated(false)
+                          setReportData([])
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
@@ -164,115 +480,112 @@ export default function Reports() {
 
             {/* Action Buttons */}
             <div className="report-actions">
-              <button className="btn btn-primary" onClick={generateReport}>
+              <button 
+                className="btn btn-primary" 
+                onClick={generateReport}
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Generating...
+                  </>
+                ) : (
+                  <>
                 <i className="bi bi-file-earmark-bar-graph"></i>
                 Generate Report
+                  </>
+                )}
               </button>
-              <button className="btn btn-secondary" onClick={downloadReport}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={downloadReport}
+                disabled={!reportGenerated || isDownloading || reportData.length === 0}
+              >
+                {isDownloading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Downloading...
+                  </>
+                ) : (
+                  <>
                 <i className="bi bi-download"></i>
-                Download Sample
+                    Download as DOCX
+                  </>
+                )}
+              </button>
+              <button 
+                className="btn btn-success" 
+                onClick={downloadExcelReport}
+                disabled={!reportGenerated || isDownloadingExcel || reportData.length === 0}
+              >
+                {isDownloadingExcel ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                <i className="bi bi-file-earmark-spreadsheet"></i>
+                    Download as Excel
+                  </>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Recent Reports */}
+          {/* Generated Report Display */}
+          {reportGenerated && reportData.length > 0 && (
           <div className="reports-section">
             <div className="section-header">
-              <h3>Recent Reports</h3>
+                <h3>
+                  {reportTypes.find(t => t.id === selectedReportType)?.name} 
+                  <span style={{ fontSize: '14px', fontWeight: 'normal', color: '#6c757d', marginLeft: '12px' }}>
+                    ({reportData.length} {reportData.length === 1 ? 'record' : 'records'})
+                  </span>
+                </h3>
             </div>
             
-            <div className="recent-reports-grid">
-              <div className="report-card">
-                <div className="report-info">
-                  <h4>Inventory Report</h4>
-                  <p>Generated on Dec 15, 2024</p>
-                  <span className="report-status completed">Completed</span>
-                </div>
-                <div className="report-actions">
-                  <button className="btn btn-sm btn-outline-primary">
-                    <i className="bi bi-eye"></i> View
-                  </button>
-                  <button className="btn btn-sm btn-outline-secondary">
-                    <i className="bi bi-download"></i> Download
-                  </button>
-                </div>
-              </div>
-
-              <div className="report-card">
-                <div className="report-info">
-                  <h4>User Activity Report</h4>
-                  <p>Generated on Dec 14, 2024</p>
-                  <span className="report-status completed">Completed</span>
-                </div>
-                <div className="report-actions">
-                  <button className="btn btn-sm btn-outline-primary">
-                    <i className="bi bi-eye"></i> View
-                  </button>
-                  <button className="btn btn-sm btn-outline-secondary">
-                    <i className="bi bi-download"></i> Download
-                  </button>
+              <div className="table-responsive" style={{ marginTop: '20px' }}>
+                <table className="table-modern">
+                  <thead>
+                    <tr>
+                      {getReportColumns().map((column, index) => (
+                        <th key={index}>
+                          {column}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportData.map((row: any, rowIndex: number) => (
+                      <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'even-row' : 'odd-row'}>
+                        {getReportColumns().map((column, colIndex) => {
+                          const value = getColumnKey(column, row)
+                          return (
+                            <td key={colIndex}>
+                              {formatReportValue(value, column)}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
                 </div>
               </div>
+          )}
 
-              <div className="report-card">
-                <div className="report-info">
-                  <h4>Cost Analysis Report</h4>
-                  <p>Generated on Dec 13, 2024</p>
-                  <span className="report-status completed">Completed</span>
-                </div>
-                <div className="report-actions">
-                  <button className="btn btn-sm btn-outline-primary">
-                    <i className="bi bi-eye"></i> View
-                  </button>
-                  <button className="btn btn-sm btn-outline-secondary">
-                    <i className="bi bi-download"></i> Download
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Report Statistics */}
+          {reportGenerated && reportData.length === 0 && (
           <div className="reports-section">
-            <div className="section-header">
-              <h3>Report Statistics</h3>
-            </div>
-            
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-info">
-                  <h4>Total Reports</h4>
-                  <div className="stat-value">156</div>
-                </div>
-                <i className="bi bi-file-earmark-text stat-icon"></i>
-              </div>
-              
-              <div className="stat-card">
-                <div className="stat-info">
-                  <h4>This Month</h4>
-                  <div className="stat-value">23</div>
-                </div>
-                <i className="bi bi-calendar-event stat-icon"></i>
-              </div>
-              
-              <div className="stat-card">
-                <div className="stat-info">
-                  <h4>Downloads</h4>
-                  <div className="stat-value">89</div>
-                </div>
-                <i className="bi bi-download stat-icon"></i>
-              </div>
-              
-              <div className="stat-card">
-                <div className="stat-info">
-                  <h4>Storage Used</h4>
-                  <div className="stat-value">2.4 GB</div>
-                </div>
-                <i className="bi bi-hdd stat-icon"></i>
+              <div className="alert alert-info">
+                <i className="bi bi-info-circle me-2"></i>
+                No data found for the selected report type and date range.
               </div>
             </div>
-          </div>
+          )}
         </div>
+        )}
       </main>
     </div>
   )

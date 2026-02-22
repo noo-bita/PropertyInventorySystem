@@ -11,6 +11,7 @@ class CustomRequest extends Model
         'teacher_name',
         'teacher_id',
         'quantity_requested',
+        'estimated_cost',
         'location',
         'subject',
         'description',
@@ -23,5 +24,6 @@ class CustomRequest extends Model
     protected $casts = [
         'quantity_requested' => 'integer',
         'teacher_id' => 'integer',
+        'estimated_cost' => 'decimal:2',
     ];
 }

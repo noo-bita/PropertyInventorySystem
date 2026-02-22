@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { apiFetch } from '../utils/api'
+import { showNotification } from '../utils/notifications'
 
 interface CustomRequestFormProps {
-  currentUser: { role: string; name: string }
+  currentUser: { role: string; name: string; id?: number }
   onRequestSubmit: (requests: any[]) => Promise<void>
 }
 
@@ -11,10 +12,13 @@ const CustomRequestForm: React.FC<CustomRequestFormProps> = ({ currentUser, onRe
     item_name: '',
     description: '',
     quantity: 1,
-    location: ''
+    location: '',
+    estimated_cost: ''
   })
   const [image, setImage] = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -22,6 +26,17 @@ const CustomRequestForm: React.FC<CustomRequestFormProps> = ({ currentUser, onRe
       ...prev,
       [name]: name === 'quantity' ? parseInt(value) || 1 : value
     }))
+  }
+
+  const handleEstimatedCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    // Allow only numbers and decimal point
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setFormData(prev => ({
+        ...prev,
+        estimated_cost: value
+      }))
+    }
   }
 
   const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.8): Promise<string> => {
@@ -57,13 +72,13 @@ const CustomRequestForm: React.FC<CustomRequestFormProps> = ({ currentUser, onRe
     if (file) {
       // Check file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size must be less than 5MB')
+        showNotification('Image size must be less than 5MB', 'error')
         return
       }
       
       // Check file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select a valid image file')
+        showNotification('Please select a valid image file', 'error')
         return
       }
       
@@ -80,7 +95,7 @@ const CustomRequestForm: React.FC<CustomRequestFormProps> = ({ currentUser, onRe
         })
       } catch (error) {
         console.error('Error compressing image:', error)
-        alert('Error processing image file')
+        showNotification('Error processing image file', 'error')
         setImage(null)
         setImageFile(null)
       }
@@ -88,16 +103,34 @@ const CustomRequestForm: React.FC<CustomRequestFormProps> = ({ currentUser, onRe
   }
 
   const submitCustomRequest = async () => {
-    try {
-      if (!formData.item_name.trim()) {
-        alert('Please enter an item name.')
-        return
-      }
+    // Clear previous errors
+    setErrors({})
+    
+    // Validation
+    const newErrors: { [key: string]: string } = {}
+    if (!formData.item_name.trim()) {
+      newErrors.item_name = 'Item name is required'
+    }
+    if (!formData.location.trim()) {
+      newErrors.location = 'Location is required'
+    }
+    if (formData.quantity < 1) {
+      newErrors.quantity = 'Quantity must be at least 1'
+    }
+    if (formData.estimated_cost && parseFloat(formData.estimated_cost) <= 0) {
+      newErrors.estimated_cost = 'Estimated cost must be greater than zero'
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
 
-      if (!formData.location.trim()) {
-        alert('Please enter a location.')
-        return
-      }
+    if (isSubmitting) return // Prevent double submission
+    
+    setIsSubmitting(true)
+    
+    try {
 
 
       const payload = {
@@ -105,6 +138,7 @@ const CustomRequestForm: React.FC<CustomRequestFormProps> = ({ currentUser, onRe
         teacher_name: currentUser.name,
         teacher_id: currentUser.id, // Add teacher_id
         quantity_requested: formData.quantity,
+        estimated_cost: formData.estimated_cost ? parseFloat(formData.estimated_cost) : null,
         location: formData.location.trim(),
         subject: null, // Remove subject field
         notes: formData.description ? `CUSTOM REQUEST: ${formData.description}` : 'CUSTOM REQUEST',
@@ -144,158 +178,305 @@ const CustomRequestForm: React.FC<CustomRequestFormProps> = ({ currentUser, onRe
 
       const responseData = await res.json()
       console.log('Success response:', responseData)
-      alert('Custom request submitted!')
+      
+      // Show success notification
+      showNotification('Custom request submitted successfully!', 'success')
       
       // Reset form
       setFormData({
         item_name: '',
         description: '',
         quantity: 1,
-        location: ''
+        location: '',
+        estimated_cost: ''
       })
       setImage(null)
       setImageFile(null)
+      setErrors({})
       
       // Call parent callback if provided
       if (onRequestSubmit) {
         await onRequestSubmit([payload])
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to submit custom request')
+      const errorMessage = err.message || 'Failed to submit custom request'
+      showNotification(errorMessage, 'error')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="request-status-card" style={{ 
-      background: 'white', 
-      borderRadius: '12px', 
-      padding: '20px', 
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-      marginBottom: '20px'
-    }}>
-      <div className="card-header" style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        marginBottom: '16px',
-        paddingBottom: '12px',
-        borderBottom: '1px solid #e9ecef'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <i className="bi bi-sliders text-info" style={{ fontSize: '20px' }}></i>
-          <h4 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>Custom Request</h4>
+    <div>
+      <div className="row">
+        <div className="col-md-6 mb-3">
+          <label className="form-label fw-bold">
+            Item Name <span className="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            className={`form-control ${errors.item_name ? 'is-invalid' : ''}`}
+            name="item_name"
+            value={formData.item_name}
+            onChange={handleInputChange}
+            placeholder="Enter item name"
+            required
+            disabled={isSubmitting}
+            style={{
+              padding: '10px 15px',
+              fontSize: '14px',
+              border: errors.item_name ? '1px solid #dc3545' : '1px solid var(--border-light)',
+              borderRadius: 'var(--radius-md)'
+            }}
+          />
+          {errors.item_name && (
+            <div className="invalid-feedback d-block" style={{ fontSize: '0.875rem', color: '#dc3545' }}>
+              {errors.item_name}
+            </div>
+          )}
+        </div>
+        
+        <div className="col-md-6 mb-3">
+          <label className="form-label fw-bold">
+            Quantity <span className="text-danger">*</span>
+          </label>
+          <input
+            type="number"
+            className={`form-control ${errors.quantity ? 'is-invalid' : ''}`}
+            name="quantity"
+            value={formData.quantity}
+            onChange={handleInputChange}
+            min="1"
+            required
+            disabled={isSubmitting}
+            style={{
+              padding: '10px 15px',
+              fontSize: '14px',
+              border: errors.quantity ? '1px solid #dc3545' : '1px solid var(--border-light)',
+              borderRadius: 'var(--radius-md)',
+              WebkitAppearance: 'none',
+              MozAppearance: 'textfield'
+            }}
+          />
+          {errors.quantity && (
+            <div className="invalid-feedback d-block" style={{ fontSize: '0.875rem', color: '#dc3545' }}>
+              {errors.quantity}
+            </div>
+          )}
         </div>
       </div>
-      
-      <div className="request-form-grid">
-        <div className="form-card">
-          <h5>Request Custom Item</h5>
-          <p className="text-muted mb-3">Request items not available in the inventory</p>
-          
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Item Name *</label>
-              <input
-                type="text"
-                className="form-control"
-                name="item_name"
-                value={formData.item_name}
-                onChange={handleInputChange}
-                placeholder="Enter item name"
-                required
-              />
-            </div>
-            
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Quantity</label>
-              <input
-                type="number"
-                className="form-control"
-                name="quantity"
-                value={formData.quantity}
-                onChange={handleInputChange}
-                min="1"
-                style={{ 
-                  WebkitAppearance: 'none',
-                  MozAppearance: 'textfield'
-                }}
-              />
-            </div>
-          </div>
 
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Location *</label>
-              <input
-                type="text"
-                className="form-control"
-                name="location"
-                value={formData.location}
-                onChange={handleInputChange}
-                placeholder="Enter location (e.g., Room 101, Library, Lab)"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="mb-3">
-            <label className="form-label">Description (Optional)</label>
-            <textarea
-              className="form-control"
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              rows={3}
-              placeholder="Describe the item you need (optional)"
-            />
-          </div>
-
-          <div className="mb-3">
-            <label className="form-label">Item Photo (Optional)</label>
+      <div className="row">
+        <div className="col-md-6 mb-3">
+          <label className="form-label fw-bold">
+            Estimated Cost
+          </label>
+          <div style={{ position: 'relative' }}>
+            <span style={{
+              position: 'absolute',
+              left: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: '#6b7280',
+              fontWeight: '600',
+              fontSize: '14px',
+              zIndex: 1
+            }}>
+              ₱
+            </span>
             <input
-              type="file"
-              className="form-control"
-              accept="image/*"
-              onChange={handleImageChange}
+              type="text"
+              className={`form-control ${errors.estimated_cost ? 'is-invalid' : ''}`}
+              name="estimated_cost"
+              value={formData.estimated_cost}
+              onChange={handleEstimatedCostChange}
+              placeholder="0.00"
+              disabled={isSubmitting}
+              style={{
+                padding: '10px 15px 10px 35px',
+                fontSize: '14px',
+                border: errors.estimated_cost ? '1px solid #dc3545' : '1px solid var(--border-light)',
+                borderRadius: 'var(--radius-md)'
+              }}
             />
-            {image && (
-              <div className="mt-2">
-                <img 
-                  src={image} 
-                  alt="Preview" 
-                  style={{ 
-                    maxWidth: '200px', 
-                    maxHeight: '200px', 
-                    objectFit: 'cover',
-                    borderRadius: '8px',
-                    border: '1px solid #dee2e6'
-                  }} 
-                />
-              </div>
-            )}
-            <small className="text-muted">Upload a photo to help identify the item you need</small>
           </div>
+          {errors.estimated_cost && (
+            <div className="invalid-feedback d-block" style={{ fontSize: '0.875rem', color: '#dc3545' }}>
+              {errors.estimated_cost}
+            </div>
+          )}
+          <small className="text-muted" style={{ fontSize: '0.875rem' }}>
+            Enter the estimated cost of the item (optional)
+          </small>
         </div>
       </div>
 
-      {/* Submit Button */}
-      <div className="request-actions" style={{ marginTop: '20px' }}>
-        <button className="btn btn-info" onClick={submitCustomRequest}>
-          <i className="bi bi-send"></i>
-          Submit Custom Request
+      <div className="row">
+        <div className="col-md-6 mb-3">
+          <label className="form-label fw-bold">
+            Location <span className="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            className={`form-control ${errors.location ? 'is-invalid' : ''}`}
+            name="location"
+            value={formData.location}
+            onChange={handleInputChange}
+            placeholder="Enter location (e.g., Room 101, Library, Lab)"
+            required
+            disabled={isSubmitting}
+            style={{
+              padding: '10px 15px',
+              fontSize: '14px',
+              border: errors.location ? '1px solid #dc3545' : '1px solid var(--border-light)',
+              borderRadius: 'var(--radius-md)'
+            }}
+          />
+          {errors.location && (
+            <div className="invalid-feedback d-block" style={{ fontSize: '0.875rem', color: '#dc3545' }}>
+              {errors.location}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <label className="form-label fw-bold">Description</label>
+        <textarea
+          className="form-control"
+          name="description"
+          value={formData.description}
+          onChange={handleInputChange}
+          rows={4}
+          placeholder="Describe the item you need and why you need it (optional)"
+          disabled={isSubmitting}
+          style={{
+            padding: '10px 15px',
+            fontSize: '14px',
+            border: '1px solid var(--border-light)',
+            borderRadius: 'var(--radius-md)',
+            resize: 'vertical'
+          }}
+        />
+        <small className="text-muted" style={{ fontSize: '0.875rem' }}>
+          Provide additional details to help admin understand your request
+        </small>
+      </div>
+
+      <div className="mb-4">
+        <label className="form-label fw-bold">Item Photo (Optional)</label>
+        <input
+          type="file"
+          className="form-control"
+          accept="image/*"
+          onChange={handleImageChange}
+          disabled={isSubmitting}
+          style={{
+            padding: '10px 15px',
+            fontSize: '14px',
+            border: '1px solid var(--border-light)',
+            borderRadius: 'var(--radius-md)'
+          }}
+        />
+        {image && (
+          <div className="mt-3">
+            <img 
+              src={image} 
+              alt="Preview" 
+              style={{ 
+                maxWidth: '200px', 
+                maxHeight: '200px', 
+                objectFit: 'cover',
+                borderRadius: '8px',
+                border: '1px solid var(--border-light)',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }} 
+            />
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger ms-2"
+              onClick={() => {
+                setImage(null)
+                setImageFile(null)
+              }}
+              disabled={isSubmitting}
+            >
+              <i className="bi bi-x"></i> Remove
+            </button>
+          </div>
+        )}
+        <small className="text-muted d-block mt-2" style={{ fontSize: '0.875rem' }}>
+          Upload a photo to help identify the item you need (max 5MB)
+        </small>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="d-flex gap-3" style={{ marginTop: '24px' }}>
+        <button
+          className="btn btn-primary"
+          onClick={submitCustomRequest}
+          disabled={isSubmitting}
+          style={{
+            padding: '10px 24px',
+            fontSize: '14px',
+            fontWeight: '500',
+            borderRadius: 'var(--radius-md)',
+            minWidth: '160px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            if (!isSubmitting) {
+              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)'
+            e.currentTarget.style.boxShadow = 'none'
+          }}
+        >
+          {isSubmitting ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Submitting...
+            </>
+          ) : (
+            <>
+              <i className="bi bi-send"></i>
+              Submit Request
+            </>
+          )}
         </button>
-        <button className="btn btn-secondary" onClick={() => {
-          setFormData({
-            item_name: '',
-            description: '',
-            quantity: 1,
-            location: ''
-          })
-          setImage(null)
-          setImageFile(null)
-        }}>
-          <i className="bi bi-arrow-clockwise"></i>
-          Reset Form
+        <button
+          className="btn btn-outline-secondary"
+          onClick={() => {
+            setFormData({
+              item_name: '',
+              description: '',
+              quantity: 1,
+              location: '',
+              estimated_cost: ''
+            })
+            setImage(null)
+            setImageFile(null)
+            setErrors({})
+          }}
+          disabled={isSubmitting}
+          style={{
+            padding: '10px 24px',
+            fontSize: '14px',
+            fontWeight: '500',
+            borderRadius: 'var(--radius-md)',
+            minWidth: '120px',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <i className="bi bi-arrow-clockwise me-2"></i>
+          Reset
         </button>
       </div>
     </div>

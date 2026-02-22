@@ -1,53 +1,137 @@
 import React, { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../utils/api'
 import Sidebar from '../components/Sidebar'
 import AdminTopBar from '../components/AdminTopBar'
+import ConfirmationModal from '../components/ConfirmationModal'
+import { AnimatedKPI } from '../components/AnimatedKPI'
+import { useDataReady } from '../hooks/useDataReady'
+import { showNotification } from '../utils/notifications'
 
 const ItemRequestManagement = () => {
   const { user: currentUser } = useAuth()
+  const location = useLocation()
   const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const dataReady = useDataReady(loading)
   
-  // Approval modal state
-  const [showApprovalModal, setShowApprovalModal] = useState(false)
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+  
+  // Unified Response Modal state
+  const [showResponseModal, setShowResponseModal] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState<any>(null)
+  const [adminRemarks, setAdminRemarks] = useState('')
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  
+  // Approval fields (for approve action)
   const [approvalDueDate, setApprovalDueDate] = useState('')
   const [approvalQuantity, setApprovalQuantity] = useState(1)
   
   // Dropdown expansion state
   const [expandedRequests, setExpandedRequests] = useState<Set<number>>(new Set())
 
+  // Reset loading when navigating to this page
   useEffect(() => {
-    const fetchRequests = async () => {
-      try {
-        const requestsResponse = await apiFetch('/api/requests')
-        if (requestsResponse.ok) {
-          const requestsData = await requestsResponse.json()
-          // Filter only item requests
-          const itemRequests = requestsData.filter((r: any) => r.request_type === 'item' || !r.request_type)
-          setRequests(itemRequests)
-        }
-      } catch (error) {
-        console.error('Error fetching requests:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
+    setLoading(true)
+    loadRequests()
+  }, [location.pathname, currentUser])
 
-    if (currentUser) {
-      fetchRequests()
-    } else {
+  const loadRequests = async () => {
+    if (!currentUser) {
+      setLoading(false)
+      return
+    }
+    
+    try {
+      setLoading(true)
+      
+      // Add timeout to prevent stuck loading (max 10 seconds)
+      let timeoutId: NodeJS.Timeout | undefined = setTimeout(() => {
+        console.warn('Requests data fetch timeout')
+        setLoading(false)
+      }, 10000)
+      
+      // Fetch both requests and inventory items in parallel
+      const [requestsResponse, inventoryResponse] = await Promise.all([
+        apiFetch('/api/requests'),
+        apiFetch('/api/inventory')
+      ])
+      
+      clearTimeout(timeoutId)
+      
+      if (requestsResponse.ok && inventoryResponse.ok) {
+        const requestsData = await requestsResponse.json()
+        const inventoryData = await inventoryResponse.json()
+        
+        // Create a Set of inventory item IDs for quick lookup
+        const inventoryItemIds = new Set(
+          inventoryData.map((item: any) => item.id)
+        )
+        
+        // Filter only pending item requests (exclude all responded/completed requests)
+        // Also filter out requests where the inventory item no longer exists
+        const itemRequests = requestsData.filter((r: any) => {
+          const isItemRequest = r.request_type === 'item' || !r.request_type
+          const isPending = String(r.status).toLowerCase() === 'pending'
+          
+          // If item_id is null, it's a custom request - skip it (item requests should have item_id)
+          if (r.item_id === null || r.item_id === undefined) {
+            return false
+          }
+          
+          // If item_id exists, check if it's in the inventory
+          const itemExists = inventoryItemIds.has(r.item_id)
+          
+          return isItemRequest && isPending && itemExists
+        })
+        setRequests(itemRequests)
+      }
+    } catch (error) {
+      console.error('Error fetching requests:', error)
+    } finally {
       setLoading(false)
     }
-  }, [currentUser])
+  }
 
   const refreshRequests = async () => {
     try {
-      const requestsResponse = await apiFetch('/api/requests')
-      if (requestsResponse.ok) {
+      // Fetch both requests and inventory items in parallel
+      const [requestsResponse, inventoryResponse] = await Promise.all([
+        apiFetch('/api/requests'),
+        apiFetch('/api/inventory')
+      ])
+      
+      if (requestsResponse.ok && inventoryResponse.ok) {
         const requestsData = await requestsResponse.json()
-        const itemRequests = requestsData.filter((r: any) => r.request_type === 'item' || !r.request_type)
+        const inventoryData = await inventoryResponse.json()
+        
+        // Create a Set of inventory item IDs for quick lookup
+        const inventoryItemIds = new Set(
+          inventoryData.map((item: any) => item.id)
+        )
+        
+        // Filter only pending item requests (exclude all responded/completed requests)
+        // Also filter out requests where the inventory item no longer exists
+        const itemRequests = requestsData.filter((r: any) => {
+          const isItemRequest = r.request_type === 'item' || !r.request_type
+          const isPending = String(r.status).toLowerCase() === 'pending'
+          
+          // If item_id is null, it's a custom request - skip it (item requests should have item_id)
+          if (r.item_id === null || r.item_id === undefined) {
+            return false
+          }
+          
+          // If item_id exists, check if it's in the inventory
+          const itemExists = inventoryItemIds.has(r.item_id)
+          
+          return isItemRequest && isPending && itemExists
+        })
         setRequests(itemRequests)
       }
     } catch (error) {
@@ -67,54 +151,109 @@ const ItemRequestManagement = () => {
     })
   }
 
-  const openApprovalModal = (request: any) => {
+  const openResponseModal = (request: any) => {
     setSelectedRequest(request)
+    setAdminRemarks('')
     setApprovalDueDate('')
     setApprovalQuantity(request.quantity_requested || 1)
-    setShowApprovalModal(true)
+    setShowResponseModal(true)
+    setShowConfirmation(false)
+    setPendingAction(null)
   }
 
-  const approveRequest = async () => {
-    if (!selectedRequest) return
+  const handleResponseAction = (action: 'approve' | 'reject') => {
+    setPendingAction(action)
+    setShowConfirmation(true)
+  }
+
+  const cancelConfirmation = () => {
+    setShowConfirmation(false)
+    setPendingAction(null)
+  }
+
+  const confirmResponse = async () => {
+    if (!selectedRequest || !pendingAction) return
+
+    setIsProcessing(true)
     try {
-      const res = await apiFetch(`/api/requests/${selectedRequest.id}/approve-and-assign`, {
-        method: 'POST',
-        body: JSON.stringify({
-          due_date: approvalDueDate,
-          quantity: approvalQuantity
+      if (pendingAction === 'approve') {
+        if (!approvalDueDate) {
+          showNotification('Please select a due date', 'error')
+          setIsProcessing(false)
+          return
+        }
+        
+        const res = await apiFetch(`/api/requests/${selectedRequest.id}/approve-and-assign`, {
+          method: 'POST',
+          body: JSON.stringify({
+            due_date: approvalDueDate,
+            quantity: approvalQuantity
+          })
         })
-      })
-      if (res.ok) {
-        await refreshRequests()
-        alert('Request approved and assigned successfully!')
-        setShowApprovalModal(false)
-      } else {
-        alert('Failed to approve request')
-      }
-    } catch (error) {
-      console.error('Error approving request:', error)
-      alert('Error approving request')
-    }
-  }
-
-  const deleteRequest = async (requestId: number) => {
-    if (window.confirm('Are you sure you want to delete this request? This action cannot be undone.')) {
-      try {
-        const response = await apiFetch(`/api/requests/${requestId}`, {
-          method: 'DELETE'
+        
+        if (res.ok) {
+          await refreshRequests()
+          showNotification('Request approved and assigned successfully!', 'success')
+          closeResponseModal()
+        } else {
+          const errorData = await res.json().catch(() => ({}))
+          showNotification(errorData.message || 'Failed to approve request', 'error')
+        }
+      } else if (pendingAction === 'reject') {
+        const response = await apiFetch(`/api/requests/${selectedRequest.id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            status: 'rejected',
+            notes: adminRemarks || null
+          })
         })
+        
         if (response.ok) {
           await refreshRequests()
-          alert('Request deleted successfully!')
+          showNotification('Request disapproved successfully!', 'success')
+          closeResponseModal()
         } else {
-          alert('Failed to delete request')
+          const errorData = await response.json().catch(() => ({}))
+          showNotification(errorData.message || 'Failed to disapprove request', 'error')
         }
-      } catch (error) {
-        console.error('Error deleting request:', error)
-        alert('Error deleting request')
       }
+    } catch (error) {
+      console.error('Error processing request:', error)
+      showNotification('Error processing request. Please try again.', 'error')
+    } finally {
+      setIsProcessing(false)
     }
   }
+
+  const closeResponseModal = () => {
+    if (!isProcessing) {
+      setShowResponseModal(false)
+      setSelectedRequest(null)
+      setAdminRemarks('')
+      setApprovalDueDate('')
+      setApprovalQuantity(1)
+      setShowConfirmation(false)
+      setPendingAction(null)
+    }
+  }
+
+  // Filter requests based on search term
+  const filterRequests = (requestsList: any[]) => {
+    if (!searchTerm) return requestsList
+    const lowerSearchTerm = searchTerm.toLowerCase()
+    return requestsList.filter(request => 
+      request.item_name?.toLowerCase().includes(lowerSearchTerm) ||
+      request.teacher_name?.toLowerCase().includes(lowerSearchTerm) ||
+      String(request.id).includes(searchTerm) ||
+      request.quantity_requested?.toString().includes(searchTerm) ||
+      request.status?.toLowerCase().includes(lowerSearchTerm)
+    )
+  }
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
 
   const pendingRequests = requests.filter((r: any) => String(r.status).toLowerCase() === 'pending')
   const approvedRequests = requests.filter((r: any) => 
@@ -122,15 +261,13 @@ const ItemRequestManagement = () => {
   )
   const rejectedRequests = requests.filter((r: any) => String(r.status).toLowerCase() === 'rejected')
 
-  if (loading) {
-    return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '50vh' }}>
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
-      </div>
-    )
-  }
+  const filteredRequests = filterRequests(requests)
+  
+  // Pagination logic
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedRequests = filteredRequests.slice(startIndex, endIndex)
 
   if (!currentUser) {
     return (
@@ -146,77 +283,80 @@ const ItemRequestManagement = () => {
       <Sidebar currentUser={currentUser} />
       
       <main className="main-content">
+        {/* Loading overlay - only covers main content, sidebar remains visible */}
+        {loading && (
+          <div className="main-content-loading">
+            <div className="full-screen-spinner">
+              <div className="loading-spinner-large"></div>
+              <p style={{ marginTop: 'var(--space-4)', color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+                Loading requests...
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {/* Topbar inside main-content to prevent sidebar overlap */}
         <AdminTopBar 
-          searchPlaceholder="Search item requests..." 
           currentUser={currentUser}
+          onSearch={(term) => setSearchTerm(term)}
+          searchValue={searchTerm}
+          searchPlaceholder="Search item requests by teacher, item, ID, quantity, or status..."
         />
         
         <div className="dashboard-content">
           <div className="container-fluid py-4">
-            {/* Request Status Cards */}
-            <div className="request-status-grid" style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-              gap: '16px', 
-              marginBottom: '20px' 
-            }}>
-              <div className="request-status-card" style={{ 
-                background: 'white', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #ffc107'
-              }}>
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <h6 className="text-warning mb-1">Pending</h6>
-                    <h3 className="mb-0">{pendingRequests.length}</h3>
+            {/* Statistics Cards - Modern Design with Animations */}
+            <div className="row mb-4">
+              <div className="col-md-4 mb-3">
+                <AnimatedKPI
+                  label="Pending"
+                  value={pendingRequests.length}
+                  icon="bi-clock"
+                  iconClass="kpi-icon-warning"
+                  loading={loading}
+                  dataReady={dataReady}
+                />
                   </div>
-                  <i className="bi bi-clock text-warning" style={{ fontSize: '24px' }}></i>
+              <div className="col-md-4 mb-3">
+                <AnimatedKPI
+                  label="Approved & Assigned"
+                  value={approvedRequests.length}
+                  icon="bi-check-circle"
+                  iconClass="kpi-icon-success"
+                  loading={loading}
+                  dataReady={dataReady}
+                />
+                </div>
+              <div className="col-md-4 mb-3">
+                <AnimatedKPI
+                  label="Rejected"
+                  value={rejectedRequests.length}
+                  icon="bi-x-circle"
+                  iconClass="kpi-icon-danger"
+                  loading={loading}
+                  dataReady={dataReady}
+                />
                 </div>
               </div>
 
-              <div className="request-status-card" style={{ 
-                background: 'white', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #28a745'
-              }}>
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <h6 className="text-success mb-1">Approved & Assigned</h6>
-                    <h3 className="mb-0">{approvedRequests.length}</h3>
-                  </div>
-                  <i className="bi bi-check-circle text-success" style={{ fontSize: '24px' }}></i>
-                </div>
-              </div>
-
-              <div className="request-status-card" style={{ 
-                background: 'white', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #dc3545'
-              }}>
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <h6 className="text-danger mb-1">Rejected</h6>
-                    <h3 className="mb-0">{rejectedRequests.length}</h3>
-                  </div>
-                  <i className="bi bi-x-circle text-danger" style={{ fontSize: '24px' }}></i>
-                </div>
+            {/* Requests Table - Modern Design */}
+            <div className="standard-card">
+              <div className="standard-card-header">
+                <h3 className="standard-card-title">
+                  <i className="bi bi-file-earmark-text me-2"></i>
+                  Item Requests
+                </h3>
+                <div className="text-muted" style={{ fontSize: '0.875rem' }}>
+                  {searchTerm ? (
+                    <>Showing {filteredRequests.length} of {requests.length} requests</>
+                  ) : (
+                    <>Total: {requests.length} requests</>
+                  )}
               </div>
             </div>
 
-            {/* Requests Table */}
-            <div className="card">
-              <div className="card-header">
-                <h5 className="mb-0">Item Requests</h5>
-              </div>
-              <div className="card-body">
                 <div className="table-responsive">
-                  <table className="table table-hover">
+                <table className="table-modern">
                     <thead>
                       <tr>
                         <th>ID</th>
@@ -229,11 +369,13 @@ const ItemRequestManagement = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {requests.map((request: any) => (
+                    {paginatedRequests.length > 0 ? (
+                      paginatedRequests.map((request: any, index: number) => (
                         <React.Fragment key={request.id}>
                           <tr 
                             style={{ cursor: 'pointer' }}
                             onClick={() => toggleRequestExpansion(request.id)}
+                            className={index % 2 === 0 ? 'even-row' : 'odd-row'}
                           >
                             <td>{request.id}</td>
                             <td>{request.teacher_name}</td>
@@ -246,30 +388,45 @@ const ItemRequestManagement = () => {
                                 request.status === 'rejected' ? 'bg-danger' :
                                 request.status === 'assigned' ? 'bg-info' :
                                 'bg-light text-dark'
-                              }`}>
-                                {request.status}
+                              }`} style={{
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: '500'
+                              }}>
+                                {request.status?.toUpperCase()}
                               </span>
                             </td>
                             <td>{new Date(request.created_at).toLocaleDateString()}</td>
                             <td onClick={(e) => e.stopPropagation()}>
-                              <div className="btn-group btn-group-sm">
-                                {request.status === 'pending' && (
-                                  <button 
-                                    className="btn btn-outline-success btn-sm"
-                                    onClick={() => openApprovalModal(request)}
-                                    title="Approve Request"
-                                  >
-                                    <i className="bi bi-check"></i>
-                                  </button>
-                                )}
-                                <button 
-                                  className="btn btn-outline-danger btn-sm"
-                                  onClick={() => deleteRequest(request.id)}
-                                  title="Delete Request"
-                                >
-                                  <i className="bi bi-trash"></i>
-                                </button>
-                              </div>
+                              <button 
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={() => openResponseModal(request)}
+                                title="Respond to Request"
+                                style={{
+                                  borderRadius: '6px',
+                                  padding: '6px 16px',
+                                  transition: 'all 0.2s ease',
+                                  fontWeight: '500'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'scale(1.05)'
+                                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                                  e.currentTarget.style.backgroundColor = '#16a34a'
+                                  e.currentTarget.style.borderColor = '#16a34a'
+                                  e.currentTarget.style.color = '#ffffff'
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'scale(1)'
+                                  e.currentTarget.style.boxShadow = 'none'
+                                  e.currentTarget.style.backgroundColor = 'transparent'
+                                  e.currentTarget.style.borderColor = '#16a34a'
+                                  e.currentTarget.style.color = '#16a34a'
+                                }}
+                              >
+                                <i className="bi bi-chat-dots me-1"></i>
+                                Response
+                              </button>
                             </td>
                           </tr>
                           {expandedRequests.has(request.id) && (
@@ -280,13 +437,13 @@ const ItemRequestManagement = () => {
                                   gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
                                   gap: '20px',
                                   padding: '20px',
-                                  backgroundColor: '#f8f9fa',
-                                  border: '1px solid #dee2e6',
+                                  backgroundColor: 'var(--gray-50)',
+                                  border: '1px solid var(--gray-200)',
                                   borderRadius: '8px',
                                   margin: '10px 0'
                                 }}>
                                   <div className="detail-section">
-                                    <h6 style={{ color: '#495057', marginBottom: '15px', borderBottom: '2px solid #007bff', paddingBottom: '5px' }}>
+                                    <h6 style={{ color: 'var(--text-dark)', marginBottom: '15px', borderBottom: '2px solid var(--primary-blue)', paddingBottom: '5px' }}>
                                       <i className="bi bi-info-circle me-2"></i>Request Details
                                     </h6>
                                     <div className="detail-item">
@@ -313,7 +470,7 @@ const ItemRequestManagement = () => {
                                   </div>
 
                                   <div className="detail-section">
-                                    <h6 style={{ color: '#495057', marginBottom: '15px', borderBottom: '2px solid #28a745', paddingBottom: '5px' }}>
+                                    <h6 style={{ color: 'var(--text-dark)', marginBottom: '15px', borderBottom: '2px solid var(--success-green)', paddingBottom: '5px' }}>
                                       <i className="bi bi-calendar-check me-2"></i>Status & Timeline
                                     </h6>
                                     <div className="detail-item">
@@ -349,82 +506,466 @@ const ItemRequestManagement = () => {
                             </tr>
                           )}
                         </React.Fragment>
-                      ))}
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="text-center py-5">
+                          <i className={`bi ${searchTerm ? 'bi-search' : 'bi-file-earmark-text'}`} style={{ fontSize: '3rem', color: '#6c757d' }}></i>
+                          <h5 className="mt-3 text-muted">
+                            {searchTerm ? 'No requests found' : 'No Item Requests'}
+                          </h5>
+                          <p className="text-muted">
+                            {searchTerm 
+                              ? `No requests match your search "${searchTerm}". Try a different search term.`
+                              : 'No item requests have been submitted yet.'}
+                          </p>
+                        </td>
+                      </tr>
+                    )}
                     </tbody>
                   </table>
                 </div>
-              </div>
+
+              {/* Pagination Controls */}
+              {filteredRequests.length > itemsPerPage && (
+                <div className="inventory-pagination" style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: 'var(--space-4)',
+                  borderTop: '1px solid var(--gray-200)',
+                  marginTop: 'var(--space-4)'
+                }}>
+                  <div className="pagination-info" style={{
+                    fontSize: '0.875rem',
+                    color: 'var(--gray-600)'
+                  }}>
+                    Showing {startIndex + 1} to {Math.min(endIndex, filteredRequests.length)} of {filteredRequests.length} requests
+                  </div>
+                  
+                  <div className="pagination-controls" style={{
+                    display: 'flex',
+                    gap: 'var(--space-2)',
+                    alignItems: 'center'
+                  }}>
+                    <button
+                      className="btn-standard btn-outline-primary"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      style={{
+                        opacity: currentPage === 1 ? 0.5 : 1,
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <i className="bi bi-chevron-left"></i>
+                      Previous
+                    </button>
+                    
+                    <div className="pagination-page-info" style={{
+                      padding: '0 var(--space-3)',
+                      fontSize: '0.875rem',
+                      color: 'var(--gray-600)',
+                      fontWeight: '500'
+                    }}>
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    
+                    <button
+                      className="btn-standard btn-outline-primary"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      style={{
+                        opacity: currentPage === totalPages ? 0.5 : 1,
+                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next
+                      <i className="bi bi-chevron-right"></i>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </main>
 
-      {/* Approval Modal */}
-      {showApprovalModal && selectedRequest && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Approve Request</h5>
+      {/* Unified Response Modal */}
+      {showResponseModal && selectedRequest && (
+        <div 
+          className="modal show d-block" 
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}
+          onClick={() => {
+            if (!showConfirmation) {
+              closeResponseModal()
+            }
+          }}
+        >
+          <div 
+            className="modal-dialog modal-dialog-centered modal-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content" style={{ borderRadius: '12px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+              <div className="modal-header" style={{ borderBottom: '1px solid var(--gray-200)', padding: '1.5rem' }}>
+                <h5 className="modal-title" style={{ fontSize: '1.5rem', fontWeight: '600', color: 'var(--text-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="bi bi-chat-dots" style={{ color: '#16a34a' }}></i>
+                  Respond to Item Request
+                </h5>
                 <button 
                   type="button" 
                   className="btn-close" 
-                  onClick={() => setShowApprovalModal(false)}
+                  onClick={closeResponseModal}
+                  disabled={isProcessing || showConfirmation}
                 ></button>
               </div>
-              <div className="modal-body">
-                <div className="mb-3">
-                  <strong>Item:</strong> {selectedRequest.item_name}<br/>
-                  <strong>Teacher:</strong> {selectedRequest.teacher_name}<br/>
-                  <strong>Quantity Requested:</strong> {selectedRequest.quantity_requested}
-                </div>
-                
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Due Date *</label>
-                      <input
-                        type="date"
-                        value={approvalDueDate}
-                        onChange={(e) => setApprovalDueDate(e.target.value)}
+              
+              {!showConfirmation ? (
+                <>
+                  <div className="modal-body" style={{ padding: '1.5rem' }}>
+                    {/* Request Details (Read-only) */}
+                    <div className="request-details-card" style={{ 
+                      backgroundColor: 'var(--light-blue)', 
+                      borderRadius: '8px', 
+                      padding: '1.25rem', 
+                      marginBottom: '1.5rem',
+                      border: '1px solid var(--border-light)'
+                    }}>
+                      <h6 style={{ color: '#16a34a', marginBottom: '1rem', fontWeight: '600', fontSize: '1rem' }}>
+                        <i className="bi bi-info-circle me-2"></i>
+                        Request Details
+                      </h6>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                        <div>
+                          <strong style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>Item Name:</strong>
+                          <div style={{ color: 'var(--text-dark)', fontWeight: '500', marginTop: '0.25rem' }}>{selectedRequest.item_name}</div>
+                        </div>
+                        <div>
+                          <strong style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>Quantity Requested:</strong>
+                          <div style={{ color: 'var(--text-dark)', fontWeight: '500', marginTop: '0.25rem' }}>{selectedRequest.quantity_requested}</div>
+                        </div>
+                        <div>
+                          <strong style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>Requesting Teacher:</strong>
+                          <div style={{ color: 'var(--text-dark)', fontWeight: '500', marginTop: '0.25rem' }}>{selectedRequest.teacher_name}</div>
+                        </div>
+                        <div>
+                          <strong style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>Date Requested:</strong>
+                          <div style={{ color: 'var(--text-dark)', fontWeight: '500', marginTop: '0.25rem' }}>{new Date(selectedRequest.created_at).toLocaleDateString()}</div>
+                        </div>
+                        {selectedRequest.location && (
+                          <div>
+                            <strong style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>Location:</strong>
+                            <div style={{ color: 'var(--text-dark)', fontWeight: '500', marginTop: '0.25rem' }}>{selectedRequest.location}</div>
+                          </div>
+                        )}
+                      </div>
+                      {selectedRequest.description && (
+                        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
+                          <strong style={{ color: 'var(--gray-500)', fontSize: '0.875rem' }}>Description / Reason:</strong>
+                          <div style={{ color: 'var(--text-dark)', marginTop: '0.25rem', lineHeight: '1.6' }}>
+                            {selectedRequest.description}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Approval Fields - Only show for pending requests */}
+                    {selectedRequest.status === 'pending' && (
+                      <div className="row mb-4">
+                        <div className="col-md-6">
+                          <div className="mb-3">
+                            <label className="form-label" style={{ fontWeight: '500', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
+                              Due Date <span className="text-danger">*</span>
+                            </label>
+                            <input
+                              type="date"
+                              value={approvalDueDate}
+                              onChange={(e) => setApprovalDueDate(e.target.value)}
+                              className="form-control"
+                              min={new Date().toISOString().split('T')[0]}
+                              style={{
+                                border: '2px solid var(--gray-300)',
+                                borderRadius: '8px',
+                                fontSize: '0.9375rem',
+                                transition: 'border-color 0.2s'
+                              }}
+                              onFocus={(e) => {
+                                e.currentTarget.style.borderColor = '#16a34a'
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = 'var(--gray-300)'
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="col-md-6">
+                          <div className="mb-3">
+                            <label className="form-label" style={{ fontWeight: '500', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
+                              Quantity to Assign <span className="text-danger">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max={selectedRequest.quantity_requested}
+                              value={approvalQuantity}
+                              onChange={(e) => setApprovalQuantity(parseInt(e.target.value) || 1)}
+                              className="form-control"
+                              style={{
+                                border: '2px solid var(--gray-300)',
+                                borderRadius: '8px',
+                                fontSize: '0.9375rem',
+                                transition: 'border-color 0.2s'
+                              }}
+                              onFocus={(e) => {
+                                e.currentTarget.style.borderColor = '#16a34a'
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = 'var(--gray-300)'
+                              }}
+                            />
+                            <small className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
+                              Maximum: {selectedRequest.quantity_requested}
+                            </small>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Optional Admin Remarks */}
+                    <div className="mb-4">
+                      <label className="form-label" style={{ fontWeight: '500', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
+                        Admin Remarks (Optional)
+                      </label>
+                      <textarea
                         className="form-control"
-                        min={new Date().toISOString().split('T')[0]}
+                        rows={4}
+                        value={adminRemarks}
+                        onChange={(e) => setAdminRemarks(e.target.value)}
+                        placeholder="Add any remarks or notes for the teacher..."
+                        style={{
+                          border: '2px solid var(--gray-300)',
+                          borderRadius: '8px',
+                          fontSize: '0.9375rem',
+                          transition: 'border-color 0.2s'
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = '#16a34a'
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--gray-300)'
+                        }}
                       />
+                      <small className="form-text text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                        This message will be sent to the requesting teacher
+                      </small>
+                    </div>
+
+                    {/* Response Action Buttons */}
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: '1rem', 
+                      justifyContent: 'center',
+                      flexWrap: 'wrap'
+                    }}>
+                      {selectedRequest.status === 'pending' && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => {
+                              if (!approvalDueDate || approvalQuantity < 1) {
+                                showNotification('Please fill in the due date and quantity before approving', 'error')
+                                return
+                              }
+                              handleResponseAction('approve')
+                            }}
+                            style={{
+                              flex: '1',
+                              minWidth: '180px',
+                              padding: '0.875rem 1.5rem',
+                              backgroundColor: '#16a34a',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '8px',
+                              fontWeight: '600',
+                              fontSize: '1rem',
+                              transition: 'all 0.2s ease',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.5rem'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#15803d'
+                              e.currentTarget.style.transform = 'translateY(-2px)'
+                              e.currentTarget.style.boxShadow = '0 4px 6px rgba(22, 163, 74, 0.3)'
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = '#16a34a'
+                              e.currentTarget.style.transform = 'translateY(0)'
+                              e.currentTarget.style.boxShadow = 'none'
+                            }}
+                          >
+                            <i className="bi bi-check-circle"></i>
+                            Approve
+                          </button>
+                          
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => handleResponseAction('reject')}
+                            style={{
+                              flex: '1',
+                              minWidth: '180px',
+                              padding: '0.875rem 1.5rem',
+                              backgroundColor: '#ef4444',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '8px',
+                              fontWeight: '600',
+                              fontSize: '1rem',
+                              transition: 'all 0.2s ease',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.5rem'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#dc2626'
+                              e.currentTarget.style.transform = 'translateY(-2px)'
+                              e.currentTarget.style.boxShadow = '0 4px 6px rgba(239, 68, 68, 0.3)'
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = '#ef4444'
+                              e.currentTarget.style.transform = 'translateY(0)'
+                              e.currentTarget.style.boxShadow = 'none'
+                            }}
+                          >
+                            <i className="bi bi-x-circle"></i>
+                            Disapproved
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label">Quantity to Assign *</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max={selectedRequest.quantity_requested}
-                        value={approvalQuantity}
-                        onChange={(e) => setApprovalQuantity(parseInt(e.target.value) || 1)}
-                        className="form-control"
-                      />
-                    </div>
+                  
+                  <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '1rem 1.5rem' }}>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary" 
+                      onClick={closeResponseModal}
+                      style={{
+                        padding: '0.5rem 1.25rem',
+                        borderRadius: '6px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      Cancel
+                    </button>
                   </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => setShowApprovalModal(false)}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-success" 
-                  onClick={approveRequest}
-                  disabled={!approvalDueDate || approvalQuantity < 1}
-                >
-                  <i className="bi bi-check-circle me-1"></i>
-                  Approve & Assign
-                </button>
-              </div>
+                </>
+              ) : (
+                <>
+                  {/* Confirmation Dialog */}
+                  <div className="modal-body" style={{ padding: '2rem', textAlign: 'center' }}>
+                    <div style={{ 
+                      fontSize: '3rem', 
+                      color: pendingAction === 'reject' ? '#ef4444' : '#16a34a',
+                      marginBottom: '1rem'
+                    }}>
+                      <i className={`bi ${pendingAction === 'reject' ? 'bi-exclamation-triangle' : 'bi-question-circle'}`}></i>
+                    </div>
+                    <h5 style={{ fontWeight: '600', color: 'var(--text-dark)', marginBottom: '0.5rem' }}>
+                      Confirm Action
+                    </h5>
+                    <p style={{ color: 'var(--gray-500)', marginBottom: '1.5rem' }}>
+                      Are you sure you want to{' '}
+                      <strong style={{ color: 'var(--text-dark)' }}>
+                        {pendingAction === 'approve' ? 'approve' : 
+                         'disapprove'} this request?
+                      </strong>
+                    </p>
+                    {pendingAction === 'approve' && (
+                      <div style={{
+                        backgroundColor: '#dcfce7',
+                        border: '1px solid #86efac',
+                        borderRadius: '8px',
+                        padding: '1rem',
+                        marginBottom: '1.5rem',
+                        textAlign: 'left'
+                      }}>
+                        <p style={{ margin: 0, color: '#166534', fontSize: '0.875rem' }}>
+                          <i className="bi bi-info-circle me-2"></i>
+                          <strong>Note:</strong> This will approve the request, assign {approvalQuantity} item(s) to the teacher with a due date of {approvalDueDate ? new Date(approvalDueDate).toLocaleDateString() : 'N/A'}, and notify the teacher. The request will be removed from the active table.
+                        </p>
+                      </div>
+                    )}
+                    {pendingAction === 'reject' && (
+                      <div style={{
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '8px',
+                        padding: '1rem',
+                        marginBottom: '1.5rem',
+                        textAlign: 'left'
+                      }}>
+                        <p style={{ margin: 0, color: '#991b1b', fontSize: '0.875rem' }}>
+                          <i className="bi bi-info-circle me-2"></i>
+                          <strong>Note:</strong> Disapproved requests will be removed from the active table. The teacher will be notified.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '1rem 1.5rem', justifyContent: 'center', gap: '1rem' }}>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary" 
+                      onClick={cancelConfirmation}
+                      disabled={isProcessing}
+                      style={{
+                        padding: '0.625rem 1.5rem',
+                        borderRadius: '6px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn"
+                      onClick={confirmResponse}
+                      disabled={isProcessing}
+                      style={{
+                        padding: '0.625rem 1.5rem',
+                        borderRadius: '6px',
+                        fontWeight: '500',
+                        backgroundColor: pendingAction === 'reject' ? '#ef4444' : '#16a34a',
+                        color: '#ffffff',
+                        border: 'none',
+                        opacity: isProcessing ? 0.7 : 1
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isProcessing) {
+                          e.currentTarget.style.opacity = '0.9'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isProcessing) {
+                          e.currentTarget.style.opacity = '1'
+                        }
+                      }}
+                    >
+                      {isProcessing ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                          Processing...
+                        </>
+                      ) : (
+                        'Confirm'
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -434,3 +975,4 @@ const ItemRequestManagement = () => {
 }
 
 export default ItemRequestManagement
+

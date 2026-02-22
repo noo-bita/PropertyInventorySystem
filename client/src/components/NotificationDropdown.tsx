@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { getApiBaseUrl } from '../utils/api'
 
 interface Notification {
   id: string
@@ -19,6 +20,47 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser
   const [unreadCount, setUnreadCount] = useState(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // Load read state from localStorage
+  const getReadNotifications = (): Set<string> => {
+    try {
+      const read = localStorage.getItem('teacher_notifications_read')
+      if (read) {
+        return new Set(JSON.parse(read))
+      }
+    } catch (e) {
+      console.error('Error loading read notifications:', e)
+    }
+    return new Set()
+  }
+
+  // Save read state to localStorage
+  const saveReadNotifications = (readIds: Set<string>) => {
+    try {
+      localStorage.setItem('teacher_notifications_read', JSON.stringify(Array.from(readIds)))
+    } catch (e) {
+      console.error('Error saving read notifications:', e)
+    }
+  }
+
+  // Load notification preferences from localStorage
+  const getNotificationPreferences = () => {
+    try {
+      const saved = localStorage.getItem('notification_preferences')
+      if (saved) {
+        const prefs = JSON.parse(saved)
+        return {
+          newUser: prefs.newUser !== undefined ? prefs.newUser : true,
+          inventory: prefs.inventory !== undefined ? prefs.inventory : true,
+          requests: prefs.requests !== undefined ? prefs.requests : true
+        }
+      }
+    } catch (e) {
+      console.error('Error loading notification preferences:', e)
+    }
+    // Default to all enabled
+    return { newUser: true, inventory: true, requests: true }
+  }
+
   // Load notifications
   useEffect(() => {
     const loadNotifications = async () => {
@@ -26,8 +68,14 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser
       let allNotifications: Notification[] = []
       
       try {
+        // Load read state and preferences from localStorage
+        const readNotifications = getReadNotifications()
+        const preferences = getNotificationPreferences()
+        
+        // Only add request-related notifications if requests preference is enabled
+        if (preferences.requests) {
         // Get approved requests for this teacher
-        const requestsResponse = await fetch('http://127.0.0.1:8000/api/requests')
+        const requestsResponse = await fetch(`${getApiBaseUrl()}/api/requests`)
         if (requestsResponse.ok) {
           const allRequests = await requestsResponse.json()
           const teacherRequests = allRequests
@@ -35,26 +83,74 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser
             .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
             .slice(0, 5) // Get last 5 approved requests
 
-          const approvedNotifications = teacherRequests.map((req: any) => ({
-            id: `approved-${req.id}`,
+          const approvedNotifications = teacherRequests.map((req: any) => {
+            const id = `approved-${req.id}`
+            return {
+              id,
             type: 'approved' as const,
             title: 'Request Approved',
             message: `Your request for ${req.item_name} has been approved`,
             timestamp: new Date(req.created_at),
-            read: false
-          }))
+              read: readNotifications.has(id)
+            }
+          })
 
           allNotifications = [...allNotifications, ...approvedNotifications]
         }
         
+        // Get custom requests for this teacher (approved or rejected)
+        try {
+          const customRequestsResponse = await fetch(`${getApiBaseUrl()}/api/custom-requests`)
+          if (customRequestsResponse.ok) {
+            const allCustomRequests = await customRequestsResponse.json()
+            const teacherCustomRequests = allCustomRequests
+              .filter((req: any) => req.teacher_name === currentUser.name && (req.status === 'purchasing' || req.status === 'approved' || req.status === 'rejected'))
+              .sort((a: any, b: any) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
+              .slice(0, 5) // Get last 5 custom requests
+
+            const customRequestNotifications = teacherCustomRequests.map((req: any) => {
+              const id = `custom-${req.status}-${req.id}`
+              const status = req.status
+              let type: 'approved' | 'rejected' | 'info' = 'info'
+              let title = 'Custom Request Update'
+              let message = ''
+              
+              if (status === 'approved') {
+                type = 'approved'
+                title = 'Custom Request Approved'
+                message = `Your custom request for ${req.item_name} has been approved and added to inventory.`
+              } else if (status === 'rejected') {
+                type = 'rejected'
+                title = 'Custom Request Disapproved'
+                message = `Your custom request for ${req.item_name} has been disapproved.`
+              } else if (status === 'purchasing') {
+                type = 'info'
+                title = 'Custom Request Being Processed'
+                message = `Your custom request for ${req.item_name} is being processed/purchased.`
+              }
+              
+              return {
+                id,
+                type,
+                title,
+                message,
+                timestamp: new Date(req.updated_at || req.created_at),
+                read: readNotifications.has(id)
+              }
+            })
+
+            allNotifications = [...allNotifications, ...customRequestNotifications]
+          }
+        } catch (error) {
+          console.error('Error loading custom request notifications:', error)
+        }
+        
         // Get assigned items to check for overdue and almost overdue
         try {
-          const assignedResponse = await fetch(`http://127.0.0.1:8000/api/requests/teacher-assigned?teacher_name=${encodeURIComponent(currentUser.name)}`)
+          const assignedResponse = await fetch(`${getApiBaseUrl()}/api/requests/teacher-assigned?teacher_name=${encodeURIComponent(currentUser.name)}`)
           if (assignedResponse.ok) {
-            const assignedItems = await assignedResponse.json()
-            
             // Get full request details for assigned items
-            const requestsResponse = await fetch('http://127.0.0.1:8000/api/requests')
+            const requestsResponse = await fetch(`${getApiBaseUrl()}/api/requests`)
             if (requestsResponse.ok) {
               const allRequests = await requestsResponse.json()
               const teacherAssignedRequests = allRequests.filter((req: any) => 
@@ -69,24 +165,26 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser
                 
                 if (dueDate < now) {
                   // Overdue
+                  const id = `overdue-${req.id}`
                   allNotifications.push({
-                    id: `overdue-${req.id}`,
+                    id,
                     type: 'overdue' as const,
                     title: 'Overdue Item Alert',
                     message: `${req.item_name} is past its return deadline`,
                     timestamp: dueDate,
-                    read: false
+                    read: readNotifications.has(id)
                   })
                 } else if (dueDate <= threeDaysFromNow) {
                   // Almost overdue (within 3 days)
                   const daysLeft = Math.ceil((dueDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+                  const id = `almost-overdue-${req.id}`
                   allNotifications.push({
-                    id: `almost-overdue-${req.id}`,
+                    id,
                     type: 'overdue' as const,
                     title: 'Item Due Soon',
                     message: `${req.item_name} is due in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
                     timestamp: dueDate,
-                    read: false
+                    read: readNotifications.has(id)
                   })
                 }
               })
@@ -94,6 +192,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser
           }
         } catch (assignedError) {
           // Assigned items API failed, continue without them
+          }
         }
 
         // Sort and limit notifications
@@ -114,6 +213,15 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser
     if (currentUser?.name) {
       loadNotifications()
     }
+    
+    // Reload notifications when preferences change (check every 2 seconds)
+    const interval = setInterval(() => {
+      if (currentUser?.name) {
+        loadNotifications()
+      }
+    }, 2000)
+    
+    return () => clearInterval(interval)
   }, [currentUser?.name])
 
   // Close dropdown when clicking outside
@@ -129,32 +237,48 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser
   }, [])
 
   const markAsRead = (notificationId: string) => {
-    setNotifications(prev => 
-      prev.map(notif => 
+    setNotifications(prev => {
+      const updated = prev.map(notif => 
         notif.id === notificationId ? { ...notif, read: true } : notif
       )
-    )
+      
+      // Save to localStorage
+      const readNotifications = getReadNotifications()
+      readNotifications.add(notificationId)
+      saveReadNotifications(readNotifications)
+      
+      return updated
+    })
     setUnreadCount(prev => Math.max(0, prev - 1))
   }
 
   const markAllAsRead = () => {
-    setNotifications(prev => prev.map(notif => ({ ...notif, read: true })))
+    setNotifications(prev => {
+      const updated = prev.map(notif => ({ ...notif, read: true }))
+      
+      // Save all notification IDs to localStorage
+      const readNotifications = new Set(prev.map(n => n.id))
+      saveReadNotifications(readNotifications)
+      
+      return updated
+    })
     setUnreadCount(0)
   }
 
-  const getNotificationIcon = (type: string, title: string) => {
+  const getNotificationVisual = (type: string, title: string) => {
+    const variants: Record<string, { icon: string; color: string; bg: string }> = {
+      overdue: { icon: 'bi-exclamation-triangle-fill', color: 'var(--danger-red)', bg: 'rgba(239,68,68,0.15)' },
+      approved: { icon: 'bi-check-circle-fill', color: 'var(--success-green)', bg: 'rgba(16,185,129,0.15)' },
+      assigned: { icon: 'bi-clipboard-check', color: 'var(--accent-blue)', bg: 'rgba(59,130,246,0.15)' },
+      rejected: { icon: 'bi-x-circle-fill', color: 'var(--danger-red)', bg: 'rgba(239,68,68,0.15)' },
+      default: { icon: 'bi-bell-fill', color: 'var(--accent-blue)', bg: 'rgba(59,130,246,0.12)' }
+    }
+
     if (title.includes('Due Soon')) {
-      return <i className="bi bi-clock-fill text-warning"></i>
+      return { icon: 'bi-clock-fill', color: 'var(--warning-orange)', bg: 'rgba(245,158,11,0.15)' }
     }
-    
-    switch (type) {
-      case 'overdue':
-        return <i className="bi bi-exclamation-triangle-fill text-danger"></i>
-      case 'approved':
-        return <i className="bi bi-check-circle-fill text-success"></i>
-      default:
-        return <i className="bi bi-bell text-primary"></i>
-    }
+
+    return variants[type] || variants.default
   }
 
   const formatTimestamp = (timestamp: Date) => {
@@ -174,33 +298,17 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser
     <div 
       className="notification-dropdown" 
       ref={dropdownRef}
-      style={{ position: 'relative' }}
     >
       {/* Bell Icon */}
       <button
-        className="btn btn-link position-relative p-2"
+        className="notification-trigger"
         onClick={() => {
           setIsOpen(!isOpen)
         }}
-        style={{ 
-          color: '#6c757d',
-          textDecoration: 'none',
-          border: 'none',
-          background: 'none',
-          cursor: 'pointer'
-        }}
       >
-        <i className="bi bi-bell" style={{ fontSize: '1.2rem' }}></i>
+        <i className="bi bi-bell-fill" style={{ fontSize: '1.25rem' }}></i>
         {unreadCount > 0 && (
-          <span 
-            className="badge bg-danger position-absolute top-0 start-100 translate-middle"
-            style={{ 
-              fontSize: '0.7rem',
-              minWidth: '18px',
-              height: '18px',
-              borderRadius: '50%'
-            }}
-          >
+          <span className="notification-badge">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -208,84 +316,60 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ currentUser
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div 
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: '100%',
-            minWidth: '350px',
-            maxHeight: '400px',
-            overflowY: 'auto',
-            zIndex: 9999,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            border: '1px solid #dee2e6',
-            borderRadius: '8px',
-            backgroundColor: 'white',
-            display: 'block',
-            marginTop: '5px',
-            padding: '0'
-          }}
-        >
+        <div className="notification-panel">
           {/* Header */}
-          <div className="dropdown-header d-flex justify-content-between align-items-center">
-            <h6 className="mb-0">Notifications</h6>
+          <div className="notification-header">
+            <h6>Notifications</h6>
             {unreadCount > 0 && (
               <button 
-                className="btn btn-sm btn-link p-0"
+                className="notification-mark-read"
                 onClick={markAllAsRead}
-                style={{ fontSize: '0.8rem' }}
               >
                 Mark all as read
               </button>
             )}
           </div>
-          <div className="dropdown-divider"></div>
 
-          {/* Notifications List */}
-          {notifications.length === 0 ? (
-            <div className="text-center py-3 text-muted">
-              <i className="bi bi-bell-slash" style={{ fontSize: '2rem' }}></i>
-              <p className="mt-2 mb-0">No notifications</p>
-            </div>
-          ) : (
-            notifications.map((notification) => (
-              <div
-                key={notification.id}
-                className={`dropdown-item d-flex align-items-start p-3 ${
-                  !notification.read ? 'bg-light' : ''
-                }`}
-                style={{ 
-                  cursor: 'pointer',
-                  borderBottom: '1px solid #f8f9fa'
-                }}
-                onClick={() => markAsRead(notification.id)}
-              >
-                <div className="me-3 mt-1">
-                  {getNotificationIcon(notification.type, notification.title)}
-                </div>
-                <div className="flex-grow-1">
-                  <div className="d-flex justify-content-between align-items-start">
-                    <h6 className="mb-1" style={{ fontSize: '0.9rem' }}>
-                      {notification.title}
-                    </h6>
-                    <small className="text-muted">
-                      {formatTimestamp(notification.timestamp)}
-                    </small>
-                  </div>
-                  <p className="mb-0 text-muted" style={{ fontSize: '0.85rem' }}>
-                    {notification.message}
-                  </p>
-                </div>
-                {!notification.read && (
-                  <div className="ms-2">
-                    <div 
-                      className="bg-primary rounded-circle"
-                      style={{ width: '8px', height: '8px' }}
-                    ></div>
-                  </div>
-                )}
+          <div className="notification-list">
+            {/* Notifications List */}
+            {notifications.length === 0 ? (
+              <div className="notification-empty">
+                <i className="bi bi-bell-slash"></i>
+                <p>No notifications</p>
               </div>
-            ))
+            ) : (
+              notifications.map((notification) => {
+                const visual = getNotificationVisual(notification.type, notification.title)
+                return (
+                  <div
+                    key={notification.id}
+                    className={`notification-item ${!notification.read ? 'unread' : ''}`}
+                    onClick={() => markAsRead(notification.id)}
+                  >
+                    <div
+                      className="notification-avatar"
+                      style={{ backgroundColor: visual.bg, color: visual.color }}
+                    >
+                      <i className={`bi ${visual.icon}`}></i>
+                    </div>
+                    <div className="notification-content flex-grow-1">
+                      <p className="notification-title">{notification.title}</p>
+                      <p className="notification-message">{notification.message}</p>
+                      <span className="notification-time">{formatTimestamp(notification.timestamp)}</span>
+                    </div>
+                    {!notification.read && <div className="notification-dot" />}
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {notifications.length > 0 && (
+            <div className="notification-footer">
+              <button className="notification-footer-btn" onClick={() => setIsOpen(false)}>
+                See previous notifications
+              </button>
+            </div>
           )}
         </div>
       )}

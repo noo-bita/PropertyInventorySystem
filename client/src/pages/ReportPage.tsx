@@ -5,11 +5,14 @@ import Sidebar from '../components/Sidebar'
 import TeacherTopBar from '../components/TeacherTopBar'
 import AdminTopBar from '../components/AdminTopBar'
 import ReportForm from '../components/ReportForm'
+import { AnimatedKPI } from '../components/AnimatedKPI'
+import { useDataReady } from '../hooks/useDataReady'
 
 const ReportPage = () => {
   const { user: currentUser } = useAuth()
   const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const dataReady = useDataReady(loading)
 
   useEffect(() => {
     const fetchReports = async () => {
@@ -66,7 +69,7 @@ const ReportPage = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           marginBottom: '20px'
         }}>
-          <h4 style={{ marginBottom: '20px', color: '#1e40af' }}>
+          <h4 style={{ marginBottom: '20px', color: '#166534' }}>
             <i className="bi bi-exclamation-triangle me-2"></i>
             Issue Reports Management
           </h4>
@@ -189,7 +192,7 @@ const ReportPage = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           marginBottom: '20px'
         }}>
-          <h4 style={{ marginBottom: '20px', color: '#1e40af' }}>
+          <h4 style={{ marginBottom: '20px', color: '#166534' }}>
             <i className="bi bi-clock-history me-2"></i>
             Report History
           </h4>
@@ -239,172 +242,197 @@ const ReportPage = () => {
       String(r.teacher_name).toLowerCase() === String(currentUser.name).toLowerCase()
     )
     
+    // Calculate status counts
+    const pendingCount = myReports.filter((r: any) => r.status === 'pending').length
+    const underReviewCount = myReports.filter((r: any) => r.status === 'under_review').length
+    const inProgressCount = myReports.filter((r: any) => r.status === 'in_progress').length
+    const resolvedCount = myReports.filter((r: any) => r.status === 'resolved').length
+    const rejectedCount = myReports.filter((r: any) => r.status === 'rejected').length
+    
     return (
       <>
-        <div className="request-status-card" style={{ 
-          background: 'white', 
-          borderRadius: '12px', 
-          padding: '20px', 
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          marginBottom: '20px'
-        }}>
-          <h4 style={{ marginBottom: '20px', color: '#1e40af' }}>
-            <i className="bi bi-exclamation-triangle me-2"></i>
-            Report Item Issues
-          </h4>
-          <p className="text-muted">Report missing or damaged items that are assigned to you</p>
-        </div>
-
-        <ReportForm currentUser={currentUser} onRequestSubmit={refreshRequests} />
-
-        {/* My Reports History */}
-        {myReports.length > 0 && (
-          <div className="request-status-card" style={{ 
-            background: 'white', 
-            borderRadius: '12px', 
-            padding: '20px', 
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            marginTop: '20px'
-          }}>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h4 style={{ marginBottom: 0, color: '#1e40af' }}>
-                <i className="bi bi-clock-history me-2"></i>
-                My Issue Reports
-              </h4>
-              <button 
-                className="btn btn-outline-primary btn-sm"
-                onClick={refreshRequests}
-                title="Refresh Reports"
-              >
-                <i className="bi bi-arrow-clockwise me-1"></i>
-                Refresh
-              </button>
-            </div>
-            
-            {/* Status Summary Cards */}
-            <div className="row mb-4">
-              <div className="col-md-2 col-6 mb-2">
-                <div className="card border-warning">
-                  <div className="card-body text-center p-2">
-                    <h6 className="text-warning mb-1">PENDING</h6>
-                    <h4 className="mb-0">{myReports.filter((r: any) => r.status === 'pending').length}</h4>
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-2 col-6 mb-2">
-                <div className="card border-info">
-                  <div className="card-body text-center p-2">
-                    <h6 className="text-info mb-1">UNDER REVIEW</h6>
-                    <h4 className="mb-0">{myReports.filter((r: any) => r.status === 'under_review').length}</h4>
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-2 col-6 mb-2">
-                <div className="card border-primary">
-                  <div className="card-body text-center p-2">
-                    <h6 className="text-primary mb-1">IN PROGRESS</h6>
-                    <h4 className="mb-0">{myReports.filter((r: any) => r.status === 'in_progress').length}</h4>
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-2 col-6 mb-2">
-                <div className="card border-success">
-                  <div className="card-body text-center p-2">
-                    <h6 className="text-success mb-1">RESOLVED</h6>
-                    <h4 className="mb-0">{myReports.filter((r: any) => r.status === 'resolved').length}</h4>
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-2 col-6 mb-2">
-                <div className="card border-danger">
-                  <div className="card-body text-center p-2">
-                    <h6 className="text-danger mb-1">REJECTED</h6>
-                    <h4 className="mb-0">{myReports.filter((r: any) => r.status === 'rejected').length}</h4>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="table-responsive">
-              <table className="table table-hover">
-                <thead className="table-light">
-                  <tr>
-                    <th>ID</th>
-                    <th>Item</th>
-                    <th>Quantity</th>
-                    <th>Status</th>
-                    <th>Admin Response</th>
-                    <th>Report Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myReports.map((report: any) => {
-                    // Extract item name and quantity from description (format: "Item Name (Qty: X) - Description" or "Item Name (Qty: X)")
-                    const itemMatch = report.description?.match(/^(.+?)\s*\(Qty:\s*(\d+)\)(?:\s*-\s*(.+))?$/)
-                    const itemName = itemMatch ? itemMatch[1] : (report.description?.split(' - ')[0] || 'Unknown Item')
-                    const quantity = itemMatch ? itemMatch[2] : '1'
-                    const description = itemMatch ? (itemMatch[3] || 'No description provided') : (report.description?.split(' - ').slice(1).join(' - ') || 'No description provided')
-                    return (
-                      <tr key={report.id}>
-                        <td>{report.id}</td>
-                        <td>
-                          <span className="badge bg-info text-dark">
-                            {itemName}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="badge bg-warning text-dark">
-                            {quantity}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`badge ${
-                            report.status === 'pending' ? 'bg-warning' :
-                            report.status === 'under_review' ? 'bg-info' :
-                            report.status === 'in_progress' ? 'bg-primary' :
-                            report.status === 'resolved' ? 'bg-success' :
-                            report.status === 'rejected' ? 'bg-danger' :
-                            'bg-light text-dark'
-                          }`}>
-                            {report.status === 'pending' && <i className="bi bi-clock me-1"></i>}
-                            {report.status === 'under_review' && <i className="bi bi-eye me-1"></i>}
-                            {report.status === 'in_progress' && <i className="bi bi-gear me-1"></i>}
-                            {report.status === 'resolved' && <i className="bi bi-check-circle me-1"></i>}
-                            {report.status === 'rejected' && <i className="bi bi-x-circle me-1"></i>}
-                            {report.status.replace('_', ' ').toUpperCase()}
-                          </span>
-                        </td>
-                        <td>
-                          {report.admin_response ? (
-                            <div className="alert alert-info p-2 mb-0" style={{ fontSize: '0.8rem' }}>
-                              {report.admin_response}
-                            </div>
-                          ) : (
-                            <span className="text-muted">No response yet</span>
-                          )}
-                        </td>
-                        <td>{new Date(report.created_at).toLocaleDateString()}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+        {/* Header Section */}
+        <div className="standard-card mb-4">
+          <div className="standard-card-header">
+            <div>
+              <h3 className="standard-card-title">
+                <i className="bi bi-exclamation-triangle me-2"></i>
+                Report Item Issues
+              </h3>
+              <p className="dashboard-subtitle mb-0">
+                Report missing, damaged, or other issues with items assigned to you
+              </p>
             </div>
           </div>
-        )}
+        </div>
+
+        {/* Status Summary Cards - Enhanced Modern Design with Animations */}
+        <div className="kpi-grid">
+          <AnimatedKPI
+            label="Pending"
+            value={pendingCount}
+            icon="bi-clock"
+            iconClass="kpi-icon-warning"
+            loading={loading}
+            dataReady={dataReady}
+          />
+          
+          <AnimatedKPI
+            label="Under Review"
+            value={underReviewCount}
+            icon="bi-eye"
+            iconClass="kpi-icon-info"
+            loading={loading}
+            dataReady={dataReady}
+          />
+          
+          <AnimatedKPI
+            label="In Progress"
+            value={inProgressCount}
+            icon="bi-gear"
+            iconClass="kpi-icon-primary"
+            loading={loading}
+            dataReady={dataReady}
+          />
+          
+          <AnimatedKPI
+            label="Resolved"
+            value={resolvedCount}
+            icon="bi-check-circle"
+            iconClass="kpi-icon-success"
+            loading={loading}
+            dataReady={dataReady}
+          />
+          
+          <AnimatedKPI
+            label="Rejected"
+            value={rejectedCount}
+            icon="bi-x-circle"
+            iconClass="kpi-icon-danger"
+            loading={loading}
+            dataReady={dataReady}
+          />
+        </div>
+
+        {/* Report Form Section */}
+        <div className="standard-card mb-4">
+          <div className="standard-card-body">
+            <ReportForm currentUser={currentUser} onRequestSubmit={refreshRequests} />
+          </div>
+        </div>
+
+        {/* My Issue Reports History */}
+        <div className="standard-card">
+          <div className="standard-card-header">
+            <h3 className="standard-card-title">
+              <i className="bi bi-clock-history me-2"></i>
+              My Issue Reports
+            </h3>
+            <div className="text-muted" style={{ fontSize: '0.875rem' }}>
+              {myReports.length > 0 
+                ? `Total: ${myReports.length} report${myReports.length !== 1 ? 's' : ''}`
+                : 'No reports yet'}
+            </div>
+          </div>
+          <div className="standard-card-body">
+            
+            {myReports.length > 0 ? (
+              <div className="table-responsive">
+                <table className="table table-modern">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Item</th>
+                      <th>Quantity</th>
+                      <th>Status</th>
+                      <th>Admin Response</th>
+                      <th>Report Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myReports.map((report: any, index: number) => {
+                      // Extract item name and quantity from description (format: "Item Name (Qty: X) - Description" or "Item Name (Qty: X)")
+                      const itemMatch = report.description?.match(/^(.+?)\s*\(Qty:\s*(\d+)\)(?:\s*-\s*(.+))?$/)
+                      const itemName = itemMatch ? itemMatch[1] : (report.description?.split(' - ')[0] || 'Unknown Item')
+                      const quantity = itemMatch ? itemMatch[2] : '1'
+                      const description = itemMatch ? (itemMatch[3] || 'No description provided') : (report.description?.split(' - ').slice(1).join(' - ') || 'No description provided')
+                      return (
+                        <tr key={report.id} className={index % 2 === 0 ? 'even-row' : 'odd-row'}>
+                          <td>{report.id}</td>
+                          <td>
+                            <span className="badge bg-info text-dark" style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontWeight: '500'
+                            }}>
+                              {itemName}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="badge bg-warning text-dark" style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontWeight: '500'
+                            }}>
+                              {quantity}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`badge ${
+                              report.status === 'pending' ? 'bg-warning' :
+                              report.status === 'under_review' ? 'bg-info' :
+                              report.status === 'in_progress' ? 'bg-primary' :
+                              report.status === 'resolved' ? 'bg-success' :
+                              report.status === 'rejected' ? 'bg-danger' :
+                              'bg-light text-dark'
+                            }`} style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: '500'
+                            }}>
+                              {report.status === 'pending' && <i className="bi bi-clock me-1"></i>}
+                              {report.status === 'under_review' && <i className="bi bi-eye me-1"></i>}
+                              {report.status === 'in_progress' && <i className="bi bi-gear me-1"></i>}
+                              {report.status === 'resolved' && <i className="bi bi-check-circle me-1"></i>}
+                              {report.status === 'rejected' && <i className="bi bi-x-circle me-1"></i>}
+                              {report.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                          </td>
+                          <td>
+                            {report.admin_response ? (
+                              <span className="text-muted" style={{ fontSize: '0.875rem' }}>
+                                <i className="bi bi-chat-dots me-1"></i>
+                                {report.admin_response}
+                              </span>
+                            ) : (
+                              <span className="text-muted" style={{ fontSize: '0.875rem' }}>No response yet</span>
+                            )}
+                          </td>
+                          <td>{new Date(report.created_at).toLocaleDateString()}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-5">
+                <i className="bi bi-exclamation-triangle" style={{ fontSize: '3rem', color: '#6c757d' }}></i>
+                <h5 className="mt-3 text-muted">No Issue Reports</h5>
+                <p className="text-muted">
+                  You haven't submitted any issue reports yet. Use the form above to report missing, damaged, or other issues with your assigned items.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </>
     )
   }
 
-  if (loading) {
-    return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '50vh' }}>
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
-      </div>
-    )
-  }
 
   if (!currentUser) {
     return (
@@ -420,6 +448,18 @@ const ReportPage = () => {
       <Sidebar currentUser={currentUser} />
       
       <main className="main-content">
+        {/* Loading overlay - only covers main content, sidebar remains visible */}
+        {loading && (
+          <div className="main-content-loading">
+            <div className="full-screen-spinner">
+              <div className="loading-spinner-large"></div>
+              <p style={{ marginTop: 'var(--space-4)', color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+                Loading issue reports...
+              </p>
+            </div>
+          </div>
+        )}
+        
         {currentUser.role === 'ADMIN' ? <AdminTopBar /> : <TeacherTopBar />}
         
         <div className="dashboard-content">

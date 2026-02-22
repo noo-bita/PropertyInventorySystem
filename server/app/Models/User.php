@@ -30,6 +30,7 @@ class User extends Authenticatable
         'birthday',
         'role',
         'photo_path',
+        'api_token',
         'deleted_at',
     ];
 

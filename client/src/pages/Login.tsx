@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import LoadingButton from '../components/LoadingButton'
 
 export default function Login() {
   const { login } = useAuth()
@@ -31,9 +32,8 @@ export default function Login() {
         {/* Left visual panel */}
         <div className="login-left">
           <div className="brand">
-            <img src="/uploads/Logo.png" alt="Property Management" />
-            <h1>Property Management</h1>
-            <h2>Inventory System</h2>
+            <img src="/uploads/Logo.png" alt="Lawaan Integrated School" />
+            <h1>Property Management Inventory System</h1>
           </div>
         </div>
 
@@ -70,9 +70,12 @@ export default function Login() {
                 <a href="#" className="text-muted" onClick={(e) => e.preventDefault()}>Forgot password?</a>
               </div>
               {error && <div className="alert alert-danger py-2">{error}</div>}
-              <button className="btn btn-primary w-100 login-submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Signing in...' : 'Sign In'}
-              </button>
+              <LoadingButton
+                type="submit"
+                className="btn btn-primary w-100 login-submit"
+                isLoading={isSubmitting}
+                label={isSubmitting ? 'Signing in...' : 'Sign In'}
+              />
             </div>
           </form>
           <div className="login-slogan small text-muted">

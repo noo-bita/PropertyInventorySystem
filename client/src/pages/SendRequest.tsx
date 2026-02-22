@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 import TeacherTopBar from '../components/TeacherTopBar'
 import AdminTopBar from '../components/AdminTopBar'
+import ConfirmationModal from '../components/ConfirmationModal'
+import { showNotification } from '../utils/notifications'
 
 const SendRequest = () => {
   const { user: currentUser } = useAuth()
@@ -23,6 +25,13 @@ const SendRequest = () => {
   
   // Dropdown expansion state
   const [expandedRequests, setExpandedRequests] = useState<Set<number>>(new Set())
+  
+  // Confirmation modal state
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [pendingRequestId, setPendingRequestId] = useState<number | null>(null)
+  const [pendingRequestName, setPendingRequestName] = useState<string>('')
+  const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
     const fetchRequests = async () => {
@@ -200,7 +209,7 @@ const SendRequest = () => {
                             )}
                             <button 
                               className="btn btn-outline-danger btn-sm"
-                              onClick={() => deleteRequest(request.id)}
+                              onClick={() => deleteRequest(request.id, request.item_name)}
                               title="Delete Request"
                             >
                               <i className="bi bi-trash"></i>
@@ -223,7 +232,7 @@ const SendRequest = () => {
                             }}>
                               {/* Request Details */}
                               <div className="detail-section">
-                                <h6 style={{ color: '#495057', marginBottom: '15px', borderBottom: '2px solid #007bff', paddingBottom: '5px' }}>
+                                <h6 style={{ color: '#495057', marginBottom: '15px', borderBottom: '2px solid #16a34a', paddingBottom: '5px' }}>
                                   <i className="bi bi-info-circle me-2"></i>Request Details
                                 </h6>
                                 <div className="detail-item">
@@ -373,43 +382,71 @@ const SendRequest = () => {
     setShowCustomResponseModal(true)
   }
 
-  const deleteRequest = async (requestId: number) => {
-    if (window.confirm('Are you sure you want to delete this request? This action cannot be undone.')) {
-      try {
-        const response = await apiFetch(`/api/requests/${requestId}`, {
-          method: 'DELETE'
-        })
-        
-        if (response.ok) {
-          await refreshRequests()
-          alert('Request deleted successfully!')
-        } else {
-          alert('Failed to delete request')
-        }
-      } catch (error) {
-        console.error('Error deleting request:', error)
-        alert('Error deleting request')
+  const deleteRequest = (requestId: number, requestName: string) => {
+    setPendingRequestId(requestId)
+    setPendingRequestName(requestName)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDeleteRequest = async () => {
+    if (!pendingRequestId) return
+    
+    setIsProcessing(true)
+    try {
+      const response = await apiFetch(`/api/requests/${pendingRequestId}`, {
+        method: 'DELETE'
+      })
+      
+      if (response.ok) {
+        await refreshRequests()
+        showNotification('Request deleted successfully!', 'success')
+        setShowDeleteConfirm(false)
+        setPendingRequestId(null)
+        setPendingRequestName('')
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        showNotification(errorData.message || 'Failed to delete request', 'error')
       }
+    } catch (error) {
+      console.error('Error deleting request:', error)
+      showNotification('Error deleting request. Please try again.', 'error')
+    } finally {
+      setIsProcessing(false)
     }
   }
 
-  const rejectRequest = async (requestId: number) => {
+  const rejectRequest = (requestId: number, requestName: string) => {
+    setPendingRequestId(requestId)
+    setPendingRequestName(requestName)
+    setShowRejectConfirm(true)
+  }
+
+  const confirmRejectRequest = async () => {
+    if (!pendingRequestId) return
+    
+    setIsProcessing(true)
     try {
-      const response = await apiFetch(`/api/requests/${requestId}/status`, {
+      const response = await apiFetch(`/api/requests/${pendingRequestId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status: 'rejected' })
       })
       
       if (response.ok) {
         await refreshRequests()
-        alert('Request rejected successfully!')
+        showNotification('Request rejected successfully!', 'success')
         setShowApprovalModal(false)
+        setShowRejectConfirm(false)
+        setPendingRequestId(null)
+        setPendingRequestName('')
       } else {
-        alert('Failed to reject request')
+        const errorData = await response.json().catch(() => ({}))
+        showNotification(errorData.message || 'Failed to reject request', 'error')
       }
     } catch (error) {
       console.error('Error rejecting request:', error)
-      alert('Error rejecting request')
+      showNotification('Error rejecting request. Please try again.', 'error')
+    } finally {
+      setIsProcessing(false)
     }
   }
 
@@ -427,35 +464,35 @@ const SendRequest = () => {
       
       if (res.ok) {
         await refreshRequests()
-        alert('Request approved and assigned successfully!')
+        showNotification('Request approved and assigned successfully!', 'success')
         setShowApprovalModal(false)
       } else {
-        alert('Failed to approve request')
+        const errorData = await res.json().catch(() => ({}))
+        showNotification(errorData.message || 'Failed to approve request', 'error')
       }
     } catch (error) {
       console.error('Error approving request:', error)
-      alert('Error approving request')
+      showNotification('Error approving request. Please try again.', 'error')
     }
   }
 
   // Return item function
   const returnItem = async (requestId: number) => {
-    if (window.confirm('Are you sure you want to return this item?')) {
-      try {
-        const response = await apiFetch(`/api/requests/${requestId}/teacher-return`, {
-          method: 'POST'
-        })
-        
-        if (response.ok) {
-          await refreshRequests()
-          alert('Item returned successfully!')
-        } else {
-          alert('Failed to return item')
-        }
-      } catch (error) {
-        console.error('Error returning item:', error)
-        alert('Error returning item')
+    try {
+      const response = await apiFetch(`/api/requests/${requestId}/teacher-return`, {
+        method: 'POST'
+      })
+      
+      if (response.ok) {
+        await refreshRequests()
+        showNotification('Item returned successfully!', 'success')
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        showNotification(errorData.message || 'Failed to return item', 'error')
       }
+    } catch (error) {
+      console.error('Error returning item:', error)
+      showNotification('Error returning item. Please try again.', 'error')
     }
   }
 
@@ -471,14 +508,15 @@ const SendRequest = () => {
       })
       if (res.ok) {
         await refreshRequests()
-        alert('Response sent successfully!')
+        showNotification('Response sent successfully!', 'success')
         setShowCustomResponseModal(false)
       } else {
-        alert('Failed to send response')
+        const errorData = await res.json().catch(() => ({}))
+        showNotification(errorData.message || 'Failed to send response', 'error')
       }
     } catch (error) {
       console.error('Error sending response:', error)
-      alert('Error sending response')
+      showNotification('Error sending response. Please try again.', 'error')
     }
   }
 
@@ -488,7 +526,7 @@ const SendRequest = () => {
 
     return (
       <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-        <div className="modal-dialog modal-lg">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">Respond to Custom Request</h5>
@@ -553,20 +591,16 @@ const SendRequest = () => {
     )
   }
 
-  // Teacher View - Submit Requests
+  // Teacher View - Submit Requests (currently unused due to admin-only access check)
+  // @ts-ignore - Intentionally unused, kept for potential future use
   const TeacherView = () => {
+    if (!currentUser) return null
     
-    const myRequests = requests.filter((r: any) => String(r.teacher_name).toLowerCase() === String(currentUser.name).toLowerCase())
+    const myRequests = requests.filter((r: any) => String(r.teacher_name).toLowerCase() === String(currentUser?.name || '').toLowerCase())
     const pendingRequests = myRequests.filter((r: any) => String(r.status).toLowerCase() === 'pending')
     const approvedRequests = myRequests.filter((r: any) => String(r.status).toLowerCase() === 'approved')
     const rejectedRequests = myRequests.filter((r: any) => String(r.status).toLowerCase() === 'rejected')
     const assignedRequests = myRequests.filter((r: any) => String(r.status).toLowerCase() === 'assigned')
-    
-    // Check for overdue items
-    const overdueRequests = assignedRequests.filter((r: any) => {
-      if (!r.due_date) return false
-      return new Date(r.due_date) < new Date()
-    })
 
     return (
       <>
@@ -710,7 +744,7 @@ const SendRequest = () => {
           marginBottom: '20px',
           textAlign: 'center'
         }}>
-          <h4 style={{ marginBottom: '20px', color: '#1e40af' }}>
+          <h4 style={{ marginBottom: '20px', color: '#166534' }}>
             <i className="bi bi-file-earmark-text me-2"></i>
             Request Management
           </h4>
@@ -743,10 +777,52 @@ const SendRequest = () => {
 
   if (loading) {
     return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '50vh' }}>
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
+      <div className="dashboard-container">
+        <Sidebar currentUser={currentUser || { name: '', role: 'TEACHER' }} />
+        <main className="main-content">
+          {currentUser?.role === 'ADMIN' ? <AdminTopBar /> : <TeacherTopBar />}
+          <div className="dashboard-content">
+            <div className="container-fluid py-4">
+              <div className="request-status-card" style={{ 
+                background: 'white', 
+                borderRadius: '12px', 
+                padding: '20px', 
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                marginBottom: '20px'
+              }}>
+                <div className="skeleton skeleton-title" style={{ width: '300px', height: '28px', marginBottom: '20px' }}></div>
+                <div className="table-responsive">
+                  <table className="table table-hover">
+                    <thead className="table-light">
+                      <tr>
+                        <th><div className="skeleton skeleton-text" style={{ width: '40px', height: '16px' }}></div></th>
+                        <th><div className="skeleton skeleton-text" style={{ width: '100px', height: '16px' }}></div></th>
+                        <th><div className="skeleton skeleton-text" style={{ width: '120px', height: '16px' }}></div></th>
+                        <th><div className="skeleton skeleton-text" style={{ width: '80px', height: '16px' }}></div></th>
+                        <th><div className="skeleton skeleton-text" style={{ width: '100px', height: '16px' }}></div></th>
+                        <th><div className="skeleton skeleton-text" style={{ width: '100px', height: '16px' }}></div></th>
+                        <th><div className="skeleton skeleton-text" style={{ width: '80px', height: '16px' }}></div></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={i} className="skeleton-table-row">
+                          <td><div className="skeleton skeleton-table-cell" style={{ width: '40px' }}></div></td>
+                          <td><div className="skeleton skeleton-table-cell" style={{ width: '120px' }}></div></td>
+                          <td><div className="skeleton skeleton-table-cell" style={{ width: '150px' }}></div></td>
+                          <td><div className="skeleton skeleton-table-cell" style={{ width: '60px' }}></div></td>
+                          <td><div className="skeleton skeleton-table-cell" style={{ width: '80px' }}></div></td>
+                          <td><div className="skeleton skeleton-table-cell" style={{ width: '100px' }}></div></td>
+                          <td><div className="skeleton skeleton-table-cell" style={{ width: '80px' }}></div></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     )
   }
@@ -838,7 +914,7 @@ const SendRequest = () => {
       {/* Approval Modal */}
       {showApprovalModal && selectedRequest && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog">
+          <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Approve Request</h5>
@@ -907,7 +983,7 @@ const SendRequest = () => {
                 <button 
                   type="button" 
                   className="btn btn-danger" 
-                  onClick={() => rejectRequest(selectedRequest.id)}
+                  onClick={() => rejectRequest(selectedRequest.id, selectedRequest.item_name)}
                 >
                   <i className="bi bi-x-circle me-1"></i>
                   Reject Request
@@ -926,6 +1002,46 @@ const SendRequest = () => {
           </div>
         </div>
       )}
+
+      {/* Reject Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showRejectConfirm}
+        onClose={() => {
+          if (!isProcessing) {
+            setShowRejectConfirm(false)
+            setPendingRequestId(null)
+            setPendingRequestName('')
+          }
+        }}
+        onConfirm={confirmRejectRequest}
+        title="Reject Request"
+        message={`Are you sure you want to reject the request for "${pendingRequestName}"?`}
+        confirmText="Reject"
+        cancelText="Cancel"
+        type="reject"
+        warningMessage="Rejected requests will be removed from the active table. This action cannot be undone."
+        isLoading={isProcessing}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          if (!isProcessing) {
+            setShowDeleteConfirm(false)
+            setPendingRequestId(null)
+            setPendingRequestName('')
+          }
+        }}
+        onConfirm={confirmDeleteRequest}
+        title="Delete Request"
+        message={`Are you sure you want to delete the request for "${pendingRequestName}"?`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="delete"
+        warningMessage="This action cannot be undone."
+        isLoading={isProcessing}
+      />
     </div>
     </>
   )

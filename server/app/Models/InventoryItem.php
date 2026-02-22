@@ -9,6 +9,7 @@ class InventoryItem extends Model
     protected $fillable = [
         'name',
         'category',
+        'secondary_category',
         'quantity',
         'available',
         'location',
@@ -17,6 +18,7 @@ class InventoryItem extends Model
         'purchase_date',
         'purchase_price',
         'purchase_type',
+        'supplier',
         'added_by',
         'status',
         'photo',

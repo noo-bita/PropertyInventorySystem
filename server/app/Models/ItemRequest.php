@@ -14,18 +14,26 @@ class ItemRequest extends Model
         'quantity_requested',
         'quantity_assigned',
         'location',
+        'subject',
+        'description',
         'due_date',
         'status',
         'return_status',
         'notes',
         'assigned_at',
-        'returned_at'
+        'returned_at',
+        'inspected_by',
+        'inspection_status',
+        'damage_remarks',
+        'damage_photo',
+        'inspected_at'
     ];
 
     protected $casts = [
         'due_date' => 'date',
         'assigned_at' => 'datetime',
         'returned_at' => 'datetime',
+        'inspected_at' => 'datetime',
     ];
 }
 

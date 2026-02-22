@@ -1,13 +1,25 @@
 import React, { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../utils/api'
 import Sidebar from '../components/Sidebar'
 import AdminTopBar from '../components/AdminTopBar'
+import ConfirmationModal from '../components/ConfirmationModal'
+import { AnimatedKPI } from '../components/AnimatedKPI'
+import { useDataReady } from '../hooks/useDataReady'
+import { showNotification } from '../utils/notifications'
 
 const ReportManagement = () => {
   const { user: currentUser } = useAuth()
+  const location = useLocation()
   const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const dataReady = useDataReady(loading)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   
   // Dropdown expansion state
   const [expandedRequests, setExpandedRequests] = useState<Set<number>>(new Set())
@@ -17,11 +29,38 @@ const ReportManagement = () => {
   const [selectedReport, setSelectedReport] = useState<any>(null)
   const [responseStatus, setResponseStatus] = useState('under_review')
   const [adminResponse, setAdminResponse] = useState('')
+  
+  // Delete confirmation modal state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteReportId, setDeleteReportId] = useState<number | null>(null)
+  const [deleteReportName, setDeleteReportName] = useState<string>('')
+  const [isDeleting, setIsDeleting] = useState(false)
 
+  // Reset loading when navigating to this page
   useEffect(() => {
-    const fetchRequests = async () => {
-      try {
+    setLoading(true)
+    loadReports()
+  }, [location.pathname, currentUser])
+
+  const loadReports = async () => {
+    if (!currentUser) {
+      setLoading(false)
+      return
+    }
+    
+    try {
+      setLoading(true)
+      
+      // Add timeout to prevent stuck loading (max 10 seconds)
+      let timeoutId: NodeJS.Timeout | undefined = setTimeout(() => {
+        console.warn('Reports data fetch timeout')
+        setLoading(false)
+      }, 10000)
+      
         const requestsResponse = await apiFetch('/api/reports')
+      
+      clearTimeout(timeoutId)
+      
         if (requestsResponse.ok) {
           const requestsData = await requestsResponse.json()
           setRequests(requestsData)
@@ -32,13 +71,6 @@ const ReportManagement = () => {
         setLoading(false)
       }
     }
-
-    if (currentUser) {
-      fetchRequests()
-    } else {
-      setLoading(false)
-    }
-  }, [currentUser])
 
   const refreshRequests = async () => {
     try {
@@ -64,22 +96,35 @@ const ReportManagement = () => {
     })
   }
 
-  const deleteRequest = async (requestId: number) => {
-    if (window.confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
-      try {
-        const response = await apiFetch(`/api/reports/${requestId}`, {
-          method: 'DELETE'
-        })
-        if (response.ok) {
-          await refreshRequests()
-          alert('Report deleted successfully!')
-        } else {
-          alert('Failed to delete report')
-        }
-      } catch (error) {
-        console.error('Error deleting report:', error)
-        alert('Error deleting report')
+  const deleteRequest = (requestId: number, reportName: string) => {
+    setDeleteReportId(requestId)
+    setDeleteReportName(reportName)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDeleteRequest = async () => {
+    if (!deleteReportId) return
+    
+    setIsDeleting(true)
+    try {
+      const response = await apiFetch(`/api/reports/${deleteReportId}`, {
+        method: 'DELETE'
+      })
+      if (response.ok) {
+        await refreshRequests()
+        showNotification('Report deleted successfully!', 'success')
+        setShowDeleteConfirm(false)
+        setDeleteReportId(null)
+        setDeleteReportName('')
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        showNotification(errorData.message || 'Failed to delete report', 'error')
       }
+    } catch (error) {
+      console.error('Error deleting report:', error)
+      showNotification('Error deleting report. Please try again.', 'error')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -101,12 +146,6 @@ const ReportManagement = () => {
     if (!selectedReport) return
 
     try {
-      console.log('Submitting response:', {
-        reportId: selectedReport.id,
-        status: responseStatus,
-        admin_response: adminResponse
-      })
-
       const response = await apiFetch(`/api/reports/${selectedReport.id}/respond`, {
         method: 'POST',
         body: JSON.stringify({
@@ -115,38 +154,57 @@ const ReportManagement = () => {
         })
       })
 
-      console.log('Response result:', response.status, response.ok)
-
       if (response.ok) {
         await refreshRequests()
         closeResponseModal()
-        alert('Response submitted successfully!')
+        showNotification('Response submitted successfully!', 'success')
       } else {
-        const errorData = await response.json()
-        console.error('Error response:', errorData)
-        alert(`Failed to submit response: ${errorData.message || 'Unknown error'}`)
+        const errorData = await response.json().catch(() => ({}))
+        showNotification(`Failed to submit response: ${errorData.message || 'Unknown error'}`, 'error')
       }
     } catch (error) {
       console.error('Error submitting response:', error)
-      alert('Error submitting response')
+      showNotification('Error submitting response. Please try again.', 'error')
     }
   }
+
+  // Filter requests based on search term
+  const filterRequests = (requestsList: any[]) => {
+    if (!searchTerm) return requestsList
+    const lowerSearchTerm = searchTerm.toLowerCase()
+    return requestsList.filter(request => {
+      const itemMatch = request.description?.match(/^(.+?)\s*\(Qty:\s*(\d+)\)(?:\s*-\s*(.+))?$/)
+      const itemName = itemMatch ? itemMatch[1] : (request.description?.split(' - ')[0] || 'Unknown Item')
+      
+      return (
+        itemName?.toLowerCase().includes(lowerSearchTerm) ||
+        request.teacher_name?.toLowerCase().includes(lowerSearchTerm) ||
+        String(request.id).includes(searchTerm) ||
+        request.status?.toLowerCase().includes(lowerSearchTerm) ||
+        request.notes?.toLowerCase().includes(lowerSearchTerm) ||
+        request.description?.toLowerCase().includes(lowerSearchTerm)
+      )
+    })
+  }
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
 
   const pendingReports = requests.filter((r: any) => String(r.status).toLowerCase() === 'pending')
   const approvedReports = requests.filter((r: any) => String(r.status).toLowerCase() === 'approved')
   const rejectedReports = requests.filter((r: any) => String(r.status).toLowerCase() === 'rejected')
-  const missingReports = requests.filter((r: any) => r.notes?.includes('MISSING'))
-  const damagedReports = requests.filter((r: any) => r.notes?.includes('DAMAGED'))
+  const missingReports = requests.filter((r: any) => r.notes?.toUpperCase().includes('MISSING') || r.description?.toUpperCase().includes('MISSING'))
+  const damagedReports = requests.filter((r: any) => r.notes?.toUpperCase().includes('DAMAGED') || r.description?.toUpperCase().includes('DAMAGED'))
 
-  if (loading) {
-    return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '50vh' }}>
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
-      </div>
-    )
-  }
+  const filteredRequests = filterRequests(requests)
+  
+  // Pagination logic
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedRequests = filteredRequests.slice(startIndex, endIndex)
 
   if (!currentUser) {
     return (
@@ -162,109 +220,90 @@ const ReportManagement = () => {
       <Sidebar currentUser={currentUser} />
       
       <main className="main-content">
+        {/* Loading overlay - only covers main content, sidebar remains visible */}
+        {loading && (
+          <div className="main-content-loading">
+            <div className="full-screen-spinner">
+              <div className="loading-spinner-large"></div>
+              <p style={{ marginTop: 'var(--space-4)', color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+                Loading reports...
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {/* Topbar inside main-content to prevent sidebar overlap */}
         <AdminTopBar 
-          searchPlaceholder="Search reports..." 
           currentUser={currentUser}
+          onSearch={(term) => setSearchTerm(term)}
+          searchValue={searchTerm}
+          searchPlaceholder="Search reports by teacher, item, ID, issue type, or status..."
         />
         
         <div className="dashboard-content">
           <div className="container-fluid py-4">
-            {/* Report Status Cards */}
-            <div className="request-status-grid" style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-              gap: '16px', 
-              marginBottom: '20px' 
-            }}>
-              <div className="request-status-card" style={{ 
-                background: 'white', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #ffc107'
-              }}>
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <h6 className="text-warning mb-1">Pending</h6>
-                    <h3 className="mb-0">{pendingReports.length}</h3>
-                  </div>
-                  <i className="bi bi-clock text-warning" style={{ fontSize: '24px' }}></i>
+            {/* Statistics Cards - Modern Design with Animations */}
+            <div className="kpi-grid mb-4">
+              <AnimatedKPI
+                label="Pending"
+                value={pendingReports.length}
+                icon="bi-clock"
+                iconClass="kpi-icon-warning"
+                loading={loading}
+                dataReady={dataReady}
+              />
+              <AnimatedKPI
+                label="Approved"
+                value={approvedReports.length}
+                icon="bi-check-circle"
+                iconClass="kpi-icon-success"
+                loading={loading}
+                dataReady={dataReady}
+              />
+              <AnimatedKPI
+                label="Rejected"
+                value={rejectedReports.length}
+                icon="bi-x-circle"
+                iconClass="kpi-icon-danger"
+                loading={loading}
+                dataReady={dataReady}
+              />
+              <AnimatedKPI
+                label="Missing Items"
+                value={missingReports.length}
+                icon="bi-exclamation-triangle"
+                iconClass="kpi-icon-danger"
+                loading={loading}
+                dataReady={dataReady}
+              />
+              <AnimatedKPI
+                label="Damaged Items"
+                value={damagedReports.length}
+                icon="bi-tools"
+                iconClass="kpi-icon-warning"
+                loading={loading}
+                dataReady={dataReady}
+              />
+              </div>
+
+            {/* Reports Table - Modern Design */}
+            <div className="standard-card">
+              <div className="standard-card-header">
+                <h3 className="standard-card-title">
+                  <i className="bi bi-exclamation-triangle me-2"></i>
+                  Issue Reports
+                </h3>
+                <div className="text-muted" style={{ fontSize: '0.875rem' }}>
+                  {searchTerm ? (
+                    <>Showing {filteredRequests.length} of {requests.length} reports</>
+                  ) : (
+                    <>Total: {requests.length} reports</>
+                  )}
                 </div>
               </div>
 
-              <div className="request-status-card" style={{ 
-                background: 'white', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #28a745'
-              }}>
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <h6 className="text-success mb-1">Approved</h6>
-                    <h3 className="mb-0">{approvedReports.length}</h3>
-                  </div>
-                  <i className="bi bi-check-circle text-success" style={{ fontSize: '24px' }}></i>
-                </div>
-              </div>
-
-              <div className="request-status-card" style={{ 
-                background: 'white', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #dc3545'
-              }}>
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <h6 className="text-danger mb-1">Rejected</h6>
-                    <h3 className="mb-0">{rejectedReports.length}</h3>
-                  </div>
-                  <i className="bi bi-x-circle text-danger" style={{ fontSize: '24px' }}></i>
-                </div>
-              </div>
-
-              <div className="request-status-card" style={{ 
-                background: 'white', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #dc3545'
-              }}>
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <h6 className="text-danger mb-1">Missing Items</h6>
-                    <h3 className="mb-0">{missingReports.length}</h3>
-                  </div>
-                  <i className="bi bi-exclamation-triangle text-danger" style={{ fontSize: '24px' }}></i>
-                </div>
-              </div>
-
-              <div className="request-status-card" style={{ 
-                background: 'white', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                borderLeft: '4px solid #fd7e14'
-              }}>
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <h6 className="text-warning mb-1">Damaged Items</h6>
-                    <h3 className="mb-0">{damagedReports.length}</h3>
-                  </div>
-                  <i className="bi bi-tools text-warning" style={{ fontSize: '24px' }}></i>
-                </div>
-              </div>
-            </div>
-
-            {/* Reports Table */}
-            <div className="card">
-              <div className="card-header">
-                <h5 className="mb-0">Issue Reports</h5>
-              </div>
-              <div className="card-body">
                 <div className="table-responsive">
-                  <table className="table table-hover">
+                <table className="table-modern">
                     <thead>
                       <tr>
                         <th>ID</th>
@@ -277,22 +316,31 @@ const ReportManagement = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {requests.map((request: any) => {
-                        // Extract item name and quantity from description (format: "Item Name (Qty: X) - Description" or "Item Name (Qty: X)")
+                    {paginatedRequests.length > 0 ? (
+                      paginatedRequests.map((request: any, index: number) => {
+                        // Extract item name and quantity from description
                         const itemMatch = request.description?.match(/^(.+?)\s*\(Qty:\s*(\d+)\)(?:\s*-\s*(.+))?$/)
                         const itemName = itemMatch ? itemMatch[1] : (request.description?.split(' - ')[0] || 'Unknown Item')
                         const quantity = itemMatch ? itemMatch[2] : '1'
+                        const isMissing = request.notes?.toUpperCase().includes('MISSING') || request.description?.toUpperCase().includes('MISSING')
+                        const isDamaged = request.notes?.toUpperCase().includes('DAMAGED') || request.description?.toUpperCase().includes('DAMAGED')
                         
                         return (
                           <React.Fragment key={request.id}>
                             <tr 
                               style={{ cursor: 'pointer' }}
                               onClick={() => toggleRequestExpansion(request.id)}
+                              className={index % 2 === 0 ? 'even-row' : 'odd-row'}
                             >
                               <td>{request.id}</td>
                               <td>{request.teacher_name}</td>
                               <td>
-                                <span className="badge bg-info text-dark">
+                                <span className="badge bg-info" style={{
+                                  padding: '6px 12px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: '500'
+                                }}>
                                   {itemName}
                                 </span>
                                 <br />
@@ -300,12 +348,17 @@ const ReportManagement = () => {
                               </td>
                               <td>
                                 <span className={`badge ${
-                                  request.notes?.includes('MISSING') ? 'bg-danger' :
-                                  request.notes?.includes('DAMAGED') ? 'bg-warning' :
+                                  isMissing ? 'bg-danger' :
+                                  isDamaged ? 'bg-warning' :
                                   'bg-secondary'
-                                }`}>
-                                  {request.notes?.includes('MISSING') ? 'Missing' :
-                                   request.notes?.includes('DAMAGED') ? 'Damaged' : 'Other'}
+                                }`} style={{
+                                  padding: '6px 12px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: '500'
+                                }}>
+                                  {isMissing ? 'MISSING' :
+                                   isDamaged ? 'DAMAGED' : 'OTHER'}
                                 </span>
                               </td>
                               <td>
@@ -314,10 +367,16 @@ const ReportManagement = () => {
                                   request.status === 'under_review' ? 'bg-info' :
                                   request.status === 'in_progress' ? 'bg-primary' :
                                   request.status === 'resolved' ? 'bg-success' :
+                                  request.status === 'approved' ? 'bg-success' :
                                   request.status === 'rejected' ? 'bg-danger' :
                                   'bg-light text-dark'
-                                }`}>
-                                  {request.status.replace('_', ' ').toUpperCase()}
+                                }`} style={{
+                                  padding: '6px 12px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: '500'
+                                }}>
+                                  {request.status?.replace('_', ' ').toUpperCase()}
                                 </span>
                               </td>
                               <td>{new Date(request.created_at).toLocaleDateString()}</td>
@@ -327,13 +386,39 @@ const ReportManagement = () => {
                                   className="btn btn-outline-primary btn-sm"
                                   onClick={() => openResponseModal(request)}
                                   title="Respond to Report"
+                                    style={{
+                                      borderRadius: '6px',
+                                      padding: '4px 12px',
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.transform = 'scale(1.05)'
+                                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.transform = 'scale(1)'
+                                      e.currentTarget.style.boxShadow = 'none'
+                                    }}
                                 >
                                   <i className="bi bi-chat-dots"></i>
                                 </button>
                                 <button 
                                   className="btn btn-outline-danger btn-sm"
-                                  onClick={() => deleteRequest(request.id)}
+                                  onClick={() => deleteRequest(request.id, request.item_name || 'Report')}
                                   title="Delete Report"
+                                    style={{
+                                      borderRadius: '6px',
+                                      padding: '4px 12px',
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.transform = 'scale(1.05)'
+                                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.transform = 'scale(1)'
+                                      e.currentTarget.style.boxShadow = 'none'
+                                    }}
                                 >
                                   <i className="bi bi-trash"></i>
                                 </button>
@@ -348,13 +433,13 @@ const ReportManagement = () => {
                                   gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
                                   gap: '20px',
                                   padding: '20px',
-                                  backgroundColor: '#f8f9fa',
-                                  border: '1px solid #dee2e6',
+                                  backgroundColor: 'var(--gray-50)',
+                                  border: '1px solid var(--gray-200)',
                                   borderRadius: '8px',
                                   margin: '10px 0'
                                 }}>
                                   <div className="detail-section">
-                                    <h6 style={{ color: '#495057', marginBottom: '15px', borderBottom: '2px solid #007bff', paddingBottom: '5px' }}>
+                                    <h6 style={{ color: 'var(--text-dark)', marginBottom: '15px', borderBottom: '2px solid var(--primary-blue)', paddingBottom: '5px' }}>
                                       <i className="bi bi-info-circle me-2"></i>Report Details
                                     </h6>
                                     <div className="detail-item">
@@ -392,7 +477,7 @@ const ReportManagement = () => {
                                   </div>
 
                                   <div className="detail-section">
-                                    <h6 style={{ color: '#495057', marginBottom: '15px', borderBottom: '2px solid #28a745', paddingBottom: '5px' }}>
+                                    <h6 style={{ color: 'var(--text-dark)', marginBottom: '15px', borderBottom: '2px solid var(--success-green)', paddingBottom: '5px' }}>
                                       <i className="bi bi-calendar-check me-2"></i>Status & Timeline
                                     </h6>
                                     <div className="detail-item">
@@ -419,25 +504,99 @@ const ReportManagement = () => {
                           )}
                         </React.Fragment>
                         )
-                      })}
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="text-center py-5">
+                          <i className={`bi ${searchTerm ? 'bi-search' : 'bi-exclamation-triangle'}`} style={{ fontSize: '3rem', color: '#6c757d' }}></i>
+                          <h5 className="mt-3 text-muted">
+                            {searchTerm ? 'No reports found' : 'No Issue Reports'}
+                          </h5>
+                          <p className="text-muted">
+                            {searchTerm 
+                              ? `No reports match your search "${searchTerm}". Try a different search term.`
+                              : 'No issue reports have been submitted yet.'}
+                          </p>
+                        </td>
+                      </tr>
+                    )}
                     </tbody>
                   </table>
-                </div>
               </div>
+
+              {/* Pagination Controls */}
+              {filteredRequests.length > itemsPerPage && (
+                <div className="inventory-pagination" style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: 'var(--space-4)',
+                  borderTop: '1px solid var(--gray-200)',
+                  marginTop: 'var(--space-4)'
+                }}>
+                  <div className="pagination-info" style={{
+                    fontSize: '0.875rem',
+                    color: 'var(--gray-600)'
+                  }}>
+                    Showing {startIndex + 1} to {Math.min(endIndex, filteredRequests.length)} of {filteredRequests.length} reports
+                  </div>
+                  
+                  <div className="pagination-controls" style={{
+                    display: 'flex',
+                    gap: 'var(--space-2)',
+                    alignItems: 'center'
+                  }}>
+                    <button
+                      className="btn-standard btn-outline-primary"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      style={{
+                        opacity: currentPage === 1 ? 0.5 : 1,
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <i className="bi bi-chevron-left"></i>
+                      Previous
+                    </button>
+                    
+                    <div className="pagination-page-info" style={{
+                      padding: '0 var(--space-3)',
+                      fontSize: '0.875rem',
+                      color: 'var(--gray-600)',
+                      fontWeight: '500'
+                    }}>
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    
+                    <button
+                      className="btn-standard btn-outline-primary"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      style={{
+                        opacity: currentPage === totalPages ? 0.5 : 1,
+                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next
+                      <i className="bi bi-chevron-right"></i>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </main>
 
       {/* Response Modal */}
-      {showResponseModal && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-lg">
+      {showResponseModal && selectedReport && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
+          <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">
                   <i className="bi bi-chat-dots me-2"></i>
-                  Respond to Report #{selectedReport?.id}
+                  Respond to Report #{selectedReport.id}
                 </h5>
                 <button 
                   type="button" 
@@ -449,19 +608,19 @@ const ReportManagement = () => {
                 <div className="row">
                   <div className="col-md-6">
                     <h6>Report Details</h6>
-                    <p><strong>Teacher:</strong> {selectedReport?.teacher_name}</p>
-                    <p><strong>Item:</strong> {selectedReport?.description?.split(' - ')[0] || 'Unknown Item'}</p>
-                    <p><strong>Location:</strong> {selectedReport?.location}</p>
+                    <p><strong>Teacher:</strong> {selectedReport.teacher_name}</p>
+                    <p><strong>Item:</strong> {selectedReport.description?.split(' - ')[0] || 'Unknown Item'}</p>
+                    <p><strong>Location:</strong> {selectedReport.location}</p>
                     <p><strong>Current Status:</strong> 
                       <span className={`badge ms-2 ${
-                        selectedReport?.status === 'pending' ? 'bg-warning' :
-                        selectedReport?.status === 'under_review' ? 'bg-info' :
-                        selectedReport?.status === 'in_progress' ? 'bg-primary' :
-                        selectedReport?.status === 'resolved' ? 'bg-success' :
-                        selectedReport?.status === 'rejected' ? 'bg-danger' :
+                        selectedReport.status === 'pending' ? 'bg-warning' :
+                        selectedReport.status === 'under_review' ? 'bg-info' :
+                        selectedReport.status === 'in_progress' ? 'bg-primary' :
+                        selectedReport.status === 'resolved' ? 'bg-success' :
+                        selectedReport.status === 'rejected' ? 'bg-danger' :
                         'bg-light text-dark'
                       }`}>
-                        {selectedReport?.status?.replace('_', ' ').toUpperCase()}
+                        {selectedReport.status?.replace('_', ' ').toUpperCase()}
                       </span>
                     </p>
                   </div>
@@ -504,10 +663,8 @@ const ReportManagement = () => {
                   type="button" 
                   className="btn btn-danger" 
                   onClick={() => {
-                    if (window.confirm('Are you sure you want to reject this report? This action will mark the report as rejected.')) {
-                      setResponseStatus('rejected')
-                      submitResponse()
-                    }
+                    setResponseStatus('rejected')
+                    submitResponse()
                   }}
                 >
                   <i className="bi bi-x-circle me-1"></i>
@@ -526,6 +683,26 @@ const ReportManagement = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          if (!isDeleting) {
+            setShowDeleteConfirm(false)
+            setDeleteReportId(null)
+            setDeleteReportName('')
+          }
+        }}
+        onConfirm={confirmDeleteRequest}
+        title="Delete Report"
+        message={`Are you sure you want to delete the report "${deleteReportName}"?`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="delete"
+        warningMessage="This action cannot be undone."
+        isLoading={isDeleting}
+      />
     </div>
   )
 }

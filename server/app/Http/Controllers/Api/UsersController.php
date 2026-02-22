@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -59,6 +60,15 @@ class UsersController extends Controller
             $userData['profile_photo_url'] = '';
         }
 
+        // Log login activity
+        ActivityLogService::logAuth(
+            'login',
+            $user->email,
+            $user->first_name . ' ' . $user->last_name,
+            $user->role,
+            $request
+        );
+
         // Note: For simplicity we are not issuing JWT; frontend will store user in localStorage
         return response()->json([
             'user' => [
@@ -84,6 +94,15 @@ class UsersController extends Controller
         if ($token) {
             $user = User::where('api_token', $token)->first();
             if ($user) {
+                // Log logout activity
+                ActivityLogService::logAuth(
+                    'logout',
+                    $user->email,
+                    $user->first_name . ' ' . $user->last_name,
+                    $user->role,
+                    $request
+                );
+                
                 $user->api_token = null;
                 $user->save();
             }
@@ -162,6 +181,15 @@ class UsersController extends Controller
             $user = User::create($userData);
 
             Log::info('User created successfully', ['user_id' => $user->id, 'email' => $user->email]);
+
+            // Log activity
+            ActivityLogService::logUser(
+                'created',
+                "User created: {$user->email} ({$user->role})",
+                $user->id,
+                $user->email,
+                $request
+            );
 
             return response()->json($user, 201)->header('Access-Control-Allow-Origin', '*');
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -255,6 +283,15 @@ class UsersController extends Controller
 
                 $user->update($userData);
 
+        // Log activity
+        ActivityLogService::logUser(
+            'updated',
+            "User updated: {$user->email} ({$user->role})",
+            $user->id,
+            $user->email,
+            $request
+        );
+
         // Return the updated user with the profile_photo_url
         $user->refresh();
 
@@ -264,9 +301,22 @@ class UsersController extends Controller
     /**
      * Remove the specified resource from storage (soft delete).
      */
-    public function destroy(User $user)
+    public function destroy(User $user, Request $request)
     {
+        $userEmail = $user->email;
+        $userId = $user->id;
+        
         $user->delete(); // This will set deleted_at timestamp
+        
+        // Log activity
+        ActivityLogService::logUser(
+            'deleted',
+            "User deleted: {$userEmail}",
+            $userId,
+            $userEmail,
+            $request
+        );
+        
         return response()->json(['message' => 'User deleted successfully'])->header('Access-Control-Allow-Origin', '*');
     }
 

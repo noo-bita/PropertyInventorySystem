@@ -13,9 +13,40 @@ import Settings from './pages/Settings'
 import Login from './pages/Login'
 import ItemRequestManagement from './pages/ItemRequestManagement'
 import CustomRequestManagement from './pages/CustomRequestManagement'
-import ReportManagement from './pages/ReportManagement'
+import ActivityLog from './pages/ActivityLog'
+import Suppliers from './pages/Suppliers'
+import ReturnReview from './pages/ReturnReview'
 import './App.css'
 import { AuthProvider, useAuth } from './context/AuthContext'
+
+// Initialize theme from localStorage on app start
+const initializeTheme = () => {
+  // Safety check for browser environment
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return
+  }
+  
+  try {
+    const savedAppearance = localStorage.getItem('appearance_preferences')
+    if (savedAppearance) {
+      const appearanceData = JSON.parse(savedAppearance)
+      if (appearanceData.theme === 'dark') {
+        document.body.classList.add('dark-theme')
+        document.documentElement.classList.add('dark-theme')
+        document.documentElement.setAttribute('data-theme', 'dark')
+      } else {
+        document.body.classList.remove('dark-theme')
+        document.documentElement.classList.remove('dark-theme')
+        document.documentElement.setAttribute('data-theme', 'light')
+      }
+    }
+  } catch (e) {
+    console.error('Error initializing theme:', e)
+  }
+}
+
+// Run theme initialization immediately (before React renders)
+initializeTheme()
 
 function Protected({ children, roles }: { children: JSX.Element, roles?: Array<'ADMIN' | 'TEACHER'> }) {
   const { user } = useAuth()
@@ -40,10 +71,12 @@ function App() {
           <Route path="/send-request/report" element={<Protected roles={['TEACHER']}><ReportPage /></Protected>} />
           <Route path="/manage-requests/item" element={<Protected roles={['ADMIN']}><ItemRequestManagement /></Protected>} />
           <Route path="/manage-requests/custom" element={<Protected roles={['ADMIN']}><CustomRequestManagement /></Protected>} />
-          <Route path="/manage-requests/report" element={<Protected roles={['ADMIN']}><ReportManagement /></Protected>} />
+          <Route path="/return-review" element={<Protected roles={['ADMIN']}><ReturnReview /></Protected>} />
           <Route path="/qr-generator" element={<Protected roles={['ADMIN']}><QRGenerator /></Protected>} />
+          <Route path="/suppliers" element={<Protected roles={['ADMIN']}><Suppliers /></Protected>} />
           <Route path="/users" element={<Protected roles={['ADMIN']}><UserManagement /></Protected>} />
           <Route path="/reports" element={<Protected roles={['ADMIN']}><Reports /></Protected>} />
+          <Route path="/activity-log" element={<Protected roles={['ADMIN']}><ActivityLog /></Protected>} />
           <Route path="/settings" element={<Protected roles={['ADMIN','TEACHER']}><Settings /></Protected>} />
         </Routes>
       </BrowserRouter>

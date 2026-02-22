@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useState, useEffect, useRef } from 'react'
+import LoadingButton from './LoadingButton'
 
 interface SidebarProps {
   currentUser?: {
@@ -35,8 +36,7 @@ export default function Sidebar({ currentUser }: SidebarProps) {
           <img src="/uploads/Logo.png" alt="Lawaan Integrated School" />
         </div>
         <div className="sidebar-title">
-          <h2>Property Management</h2>
-          <h3>Inventory System</h3>
+          <h2>Property Management Inventory System</h2>
         </div>
       </div>
       
@@ -52,22 +52,18 @@ export default function Sidebar({ currentUser }: SidebarProps) {
         </NavLink>
         )}
         <NavLink to="/assigned-items" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <i className="bi bi-box-seam"></i>
-          Assigned Items
+          <i className={role === 'TEACHER' ? 'bi bi-box-seam' : 'bi bi-clipboard-check'}></i>
+          {role === 'TEACHER' ? 'Inventory' : 'Assigned Items'}
         </NavLink>
         {role === 'TEACHER' && (
           <>
             <NavLink to="/send-request/item" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <i className="bi bi-box-seam"></i>
+              <i className="bi bi-cart-plus"></i>
               Item Request
             </NavLink>
             <NavLink to="/send-request/custom" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <i className="bi bi-sliders"></i>
               Custom Request
-            </NavLink>
-            <NavLink to="/send-request/report" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <i className="bi bi-exclamation-triangle"></i>
-              Report Issue
             </NavLink>
           </>
         )}
@@ -99,22 +95,26 @@ export default function Sidebar({ currentUser }: SidebarProps) {
                   <i className="bi bi-sliders me-2"></i>
                   Custom Requests
                 </NavLink>
-                <NavLink 
-                  to="/manage-requests/report" 
-                  className={({ isActive }) => `dropdown-item ${isActive ? 'active' : ''}`}
-                  onClick={() => setIsManageDropdownOpen(false)}
-                >
-                  <i className="bi bi-exclamation-triangle me-2"></i>
-                  Reports
-                </NavLink>
               </div>
             )}
           </div>
         )}
         {role === 'ADMIN' && (
+        <NavLink to="/return-review" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <i className="bi bi-clipboard-check"></i>
+          Return Review
+        </NavLink>
+        )}
+        {role === 'ADMIN' && (
         <NavLink to="/qr-generator" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <i className="bi bi-qr-code"></i>
           QR Generator
+        </NavLink>
+        )}
+        {role === 'ADMIN' && (
+        <NavLink to="/suppliers" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <i className="bi bi-truck"></i>
+          Sources
         </NavLink>
         )}
         {role === 'ADMIN' && (
@@ -127,6 +127,12 @@ export default function Sidebar({ currentUser }: SidebarProps) {
         <NavLink to="/reports" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <i className="bi bi-bar-chart"></i>
           Reports
+        </NavLink>
+        )}
+        {role === 'ADMIN' && (
+        <NavLink to="/activity-log" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <i className="bi bi-clock-history"></i>
+          Activity Log
         </NavLink>
         )}
         <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
@@ -143,9 +149,13 @@ export default function Sidebar({ currentUser }: SidebarProps) {
             <div style={{ fontSize: '12px', opacity: 0.8 }}>{role}</div>
           </div>
         </div>
-        <button className="logout-btn" onClick={logout}>
+        <LoadingButton
+          className="logout-btn"
+          onClick={logout}
+          label="Logout"
+        >
           <i className="bi bi-box-arrow-right"></i> Logout
-        </button>
+        </LoadingButton>
       </div>
     </aside>
   )

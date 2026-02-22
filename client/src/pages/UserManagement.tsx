@@ -1,17 +1,27 @@
 import React, { useEffect, useState, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 import AdminTopBar from '../components/AdminTopBar'
+import ConfirmationModal from '../components/ConfirmationModal'
 import { showNotification } from '../utils/notifications'
+import LoadingButton from '../components/LoadingButton'
+import { getApiBaseUrl } from '../utils/api'
 
 export default function UserManagement() {
   const { user: currentUser } = useAuth()
+  const location = useLocation()
   
   const [selectedRole, setSelectedRole] = useState('All Roles')
   const [users, setUsers] = useState<Array<any>>([])
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const [formFirstName, setFormFirstName] = useState('')
   const [formLastName, setFormLastName] = useState('')
@@ -42,13 +52,22 @@ export default function UserManagement() {
   const [showEditPassword, setShowEditPassword] = useState(false)
   const [showEditPasswordConfirm, setShowEditPasswordConfirm] = useState(false)
   const editPhotoInputRef = useRef<HTMLInputElement | null>(null)
+  const [isSavingUser, setIsSavingUser] = useState(false)
 
+  // Delete confirmation modal state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteUserId, setDeleteUserId] = useState<number | null>(null)
+  const [deleteUserName, setDeleteUserName] = useState<string>('')
+  const [isDeleting, setIsDeleting] = useState(false)
 
+  // Reset loading when navigating to this page
   useEffect(() => {
     setLoading(true)
     setError(null)
+    setSearchTerm('') // Clear search term on page load
     
-    fetch('http://127.0.0.1:8000/api/users')
+    const timeoutId = setTimeout(() => {
+    fetch(`${getApiBaseUrl()}/api/users`)
       .then(r => {
         return r.json()
       })
@@ -59,7 +78,6 @@ export default function UserManagement() {
            full_name: user.full_name || `${user.first_name} ${user.last_name}`
          }))
          
-         
          setUsers(usersWithFullName)
          setLoading(false)
        })
@@ -69,7 +87,15 @@ export default function UserManagement() {
         setUsers([])
         setLoading(false)
       })
-  }, [])
+    }, 500)
+    
+    return () => clearTimeout(timeoutId)
+  }, [location.pathname])
+
+  // Reset to page 1 when search or filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, selectedRole])
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -83,6 +109,40 @@ export default function UserManagement() {
     }
   }
 
+  // Filter users by role and search term
+  const filteredUsers = users
+    .filter(u => {
+      const roleMatch = selectedRole === 'All Roles' 
+      || (selectedRole === 'Administrator' && (u.role === 'ADMIN' || u.role === 'ADMINISTRATOR'))
+      || (selectedRole === 'Teacher' && u.role === 'TEACHER')
+      
+      if (!roleMatch) return false
+      
+      if (!searchTerm.trim()) return true
+      
+      const searchLower = searchTerm.toLowerCase()
+      const fullName = (u.full_name || `${u.first_name} ${u.last_name}`).toLowerCase()
+      const email = (u.email || '').toLowerCase()
+      const userId = `#${String(u.id).padStart(3, '0')}`.toLowerCase()
+      const role = (u.role || '').toLowerCase()
+      
+      return fullName.includes(searchLower) 
+        || email.includes(searchLower)
+        || userId.includes(searchLower)
+        || role.includes(searchLower)
+    })
+    .sort((a, b) => {
+      const nameA = (a.full_name || `${a.first_name} ${a.last_name}`).toLowerCase()
+      const nameB = (b.full_name || `${b.first_name} ${b.last_name}`).toLowerCase()
+      return nameA.localeCompare(nameB)
+    })
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedUsers = filteredUsers.slice(startIndex, endIndex)
+
   const toggleRowExpansion = (userId: number) => {
     const newExpanded = new Set(expandedRows)
     if (newExpanded.has(userId)) {
@@ -94,6 +154,7 @@ export default function UserManagement() {
   }
 
   const handleAddUser = () => {
+    if (isSavingUser) return
     if (!formFirstName.trim() || !formLastName.trim() || !formEmail.trim() || !formPassword.trim()) {
       showNotification('Please fill in all required fields', 'error')
       return
@@ -119,7 +180,9 @@ export default function UserManagement() {
       formData.append('photo', photoInputRef.current.files[0])
     }
 
-    fetch('http://127.0.0.1:8000/api/users', {
+    setIsSavingUser(true)
+
+    fetch(`${getApiBaseUrl()}/api/users`, {
       method: 'POST',
       body: formData,
     })
@@ -129,7 +192,6 @@ export default function UserManagement() {
           try {
             const errorData = await r.json()
             if (errorData.errors) {
-              // Handle validation errors
               const errorMessages = Object.values(errorData.errors).flat()
               errorMessage = errorMessages.join(', ')
             } else if (errorData.message) {
@@ -145,8 +207,6 @@ export default function UserManagement() {
       })
       .then((created) => {
         setUsers(prev => [created, ...prev])
-        
-        // Show success notification
         showNotification('User added successfully!', 'success')
         
         // Reset form
@@ -171,7 +231,6 @@ export default function UserManagement() {
           if (modalInstance) {
             modalInstance.hide()
           } else {
-            // Fallback: remove modal classes manually
             modal.classList.remove('show', 'd-block')
             modal.style.display = 'none'
             document.body.classList.remove('modal-open')
@@ -183,6 +242,9 @@ export default function UserManagement() {
       .catch((err) => {
         console.error('Failed to create user', err)
         showNotification('Failed to create user. Please check your inputs.', 'error')
+      })
+      .finally(() => {
+        setIsSavingUser(false)
       })
   }
 
@@ -203,6 +265,7 @@ export default function UserManagement() {
   }
 
   const handleUpdateUser = () => {
+    if (isSavingUser) return
     
     if (!editFirstName.trim() || !editLastName.trim() || !editEmail.trim()) {
       showNotification('Please fill in all required fields', 'error')
@@ -214,13 +277,12 @@ export default function UserManagement() {
       return
     }
 
-    const url = `http://127.0.0.1:8000/api/users/${editingUser.id}`
-
-    // Check if there's a file to upload
+    const url = `${getApiBaseUrl()}/api/users/${editingUser.id}`
     const hasFile = editPhotoInputRef.current?.files?.[0]
     
+    setIsSavingUser(true)
+
     if (hasFile) {
-      // Use FormData for file uploads
       const formData = new FormData()
       formData.append('first_name', editFirstName)
       formData.append('last_name', editLastName)
@@ -237,13 +299,11 @@ export default function UserManagement() {
              formData.append('photo', hasFile)
        formData.append('_method', 'PUT')
 
-
              fetch(url, {
          method: 'POST',
          body: formData,
        })
         .then(async (r) => {
-          
           if (!r.ok) {
             const errorText = await r.text()
             console.error('Server error response:', errorText)
@@ -255,14 +315,12 @@ export default function UserManagement() {
           setUsers(prev => prev.map(u => u.id === updated.id ? updated : u))
           setEditingUser(null)
           
-          // Close the modal
           const modal = document.getElementById('editUserModal')
           if (modal) {
             const modalInstance = (window as any).bootstrap?.Modal?.getInstance(modal)
             if (modalInstance) {
               modalInstance.hide()
             } else {
-              // Fallback: remove modal classes manually
               modal.classList.remove('show', 'd-block')
               modal.style.display = 'none'
               document.body.classList.remove('modal-open')
@@ -271,7 +329,6 @@ export default function UserManagement() {
             }
           }
           
-          // Show success notification
           showNotification('User updated successfully!', 'success')
           
           // Reset edit form
@@ -291,17 +348,14 @@ export default function UserManagement() {
         })
                 .catch((err) => {
           console.error('Failed to update user', err)
-          console.error('Error details:', err)
           showNotification(`Failed to update user: ${err.message || 'Unknown error occurred'}`, 'error')
           
-          // Close the modal even on error
           const modal = document.getElementById('editUserModal')
           if (modal) {
             const modalInstance = (window as any).bootstrap?.Modal?.getInstance(modal)
             if (modalInstance) {
               modalInstance.hide()
             } else {
-              // Fallback: remove modal classes manually
               modal.classList.remove('show', 'd-block')
               modal.style.display = 'none'
               document.body.classList.remove('modal-open')
@@ -310,7 +364,6 @@ export default function UserManagement() {
             }
           }
           
-          // Reset edit form on error as well
           setEditFirstName('')
           setEditLastName('')
           setEditMiddleName('')
@@ -325,8 +378,10 @@ export default function UserManagement() {
           setShowEditPasswordConfirm(false)
           if (editPhotoInputRef.current) editPhotoInputRef.current.value = ''
         })
+        .finally(() => {
+          setIsSavingUser(false)
+        })
       } else {
-      // Use JSON for text-only updates
       const updateData: any = {
         first_name: editFirstName,
         last_name: editLastName,
@@ -342,10 +397,7 @@ export default function UserManagement() {
       if (editContact) updateData.contact_number = editContact
       if (editAddress) updateData.address = editAddress
              if (editBirthday) updateData.birthday = editBirthday
-       
-       // Add _method field for Laravel to recognize this as PUT request
        updateData._method = 'PUT'
-
 
              fetch(url, {
          method: 'POST',
@@ -356,7 +408,6 @@ export default function UserManagement() {
          body: JSON.stringify(updateData),
        })
         .then(async (r) => {
-          
           if (!r.ok) {
             const errorText = await r.text()
             console.error('Server error response:', errorText)
@@ -368,14 +419,12 @@ export default function UserManagement() {
           setUsers(prev => prev.map(u => u.id === updated.id ? updated : u))
           setEditingUser(null)
           
-          // Close the modal
           const modal = document.getElementById('editUserModal')
           if (modal) {
             const modalInstance = (window as any).bootstrap?.Modal?.getInstance(modal)
             if (modalInstance) {
               modalInstance.hide()
             } else {
-              // Fallback: remove modal classes manually
               modal.classList.remove('show', 'd-block')
               modal.style.display = 'none'
               document.body.classList.remove('modal-open')
@@ -384,10 +433,8 @@ export default function UserManagement() {
             }
           }
           
-          // Show success notification
           showNotification('User updated successfully!', 'success')
           
-          // Reset edit form
           setEditFirstName('')
           setEditLastName('')
           setEditMiddleName('')
@@ -404,17 +451,14 @@ export default function UserManagement() {
         })
         .catch((err) => {
           console.error('Failed to update user', err)
-          console.error('Error details:', err)
           showNotification(`Failed to update user: ${err.message || 'Unknown error occurred'}`, 'error')
           
-          // Close the modal even on error
           const modal = document.getElementById('editUserModal')
           if (modal) {
             const modalInstance = (window as any).bootstrap?.Modal?.getInstance(modal)
             if (modalInstance) {
               modalInstance.hide()
             } else {
-              // Fallback: remove modal classes manually
               modal.classList.remove('show', 'd-block')
               modal.style.display = 'none'
               document.body.classList.remove('modal-open')
@@ -423,7 +467,6 @@ export default function UserManagement() {
             }
           }
           
-          // Reset edit form on error as well
           setEditFirstName('')
           setEditLastName('')
           setEditMiddleName('')
@@ -438,84 +481,116 @@ export default function UserManagement() {
           setShowEditPasswordConfirm(false)
           if (editPhotoInputRef.current) editPhotoInputRef.current.value = ''
         })
+        .finally(() => {
+          setIsSavingUser(false)
+        })
     }
   }
 
-  const handleDeleteUser = (userId: number) => {
-    if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      fetch(`http://127.0.0.1:8000/api/users/${userId}`, {
+  const handleDeleteUser = (userId: number, userName: string) => {
+    setDeleteUserId(userId)
+    setDeleteUserName(userName)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDeleteUser = async () => {
+    if (!deleteUserId) return
+    
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/users/${deleteUserId}`, {
         method: 'DELETE',
       })
-        .then(async (r) => {
-          if (!r.ok) {
-            const errorText = await r.text()
-            throw new Error(errorText)
-          }
-          return r.json()
-        })
-        .then(() => {
-          setUsers(prev => prev.filter(u => u.id !== userId))
-          showNotification('User deleted successfully!', 'success')
-        })
-        .catch((err) => {
-          console.error('Failed to delete user', err)
-          showNotification('Failed to delete user.', 'error')
-        })
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(errorText)
+      }
+      
+      await response.json()
+      setUsers(prev => prev.filter(u => u.id !== deleteUserId))
+      showNotification('User deleted successfully!', 'success')
+      setShowDeleteConfirm(false)
+      setDeleteUserId(null)
+      setDeleteUserName('')
+    } catch (err: any) {
+      console.error('Failed to delete user', err)
+      showNotification('Failed to delete user.', 'error')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
-  const addUserButton = (
-    <button 
-      className="add-user-btn"
-      data-bs-toggle="modal"
-      data-bs-target="#addUserModal"
-    >
-      <i className="bi bi-plus"></i> Add User
-    </button>
-  )
+  if (!currentUser) return null
 
   return (
     <div className="dashboard-container">
-      <Sidebar />
+      <Sidebar currentUser={currentUser} />
       
       <main className="main-content">
+        {/* Loading overlay - only covers main content, sidebar remains visible */}
+        {loading && (
+          <div className="main-content-loading">
+            <div className="full-screen-spinner">
+              <div className="loading-spinner-large"></div>
+              <p style={{ marginTop: 'var(--space-4)', color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+                Loading users...
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {/* Topbar inside main-content to prevent sidebar overlap - with search */}
         <AdminTopBar 
-          searchPlaceholder="Search users..." 
+          key={`user-management-topbar-${location.pathname}`}
           currentUser={currentUser}
-          rightContent={addUserButton}
+          searchPlaceholder="Search users..."
+          onSearch={setSearchTerm}
+          searchValue={searchTerm}
         />
         
         <div className="dashboard-content">
-          <div className="dashboard-header">
+          <div className="container-fluid py-4">
+            {/* Main Header */}
+            <div className="mb-4">
             <h1 className="dashboard-title">User Management</h1>
             <p className="dashboard-subtitle">Manage school staff, administrators, and teachers</p>
           </div>
 
-          {/* Loading and Error States */}
-          {loading && (
-            <div className="text-center p-4">
-              <div className="spinner-border text-primary" role="status">
-                <span className="visually-hidden">Loading...</span>
-              </div>
-              <p className="mt-2">Loading users...</p>
-            </div>
-          )}
-
-          {error && (
+            {/* Error State */}
+            {error && !loading && (
             <div className="alert alert-danger" role="alert">
               <strong>Error:</strong> {error}
             </div>
           )}
 
-          {/* Users Table */}
+            {/* Users Section - Matching Inventory Layout */}
           {!loading && !error && (
-            <div className="users-section">
-              <div className="section-header">
+              <div className="inventory-section">
+                <div className="section-header" style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 'var(--space-4)'
+                }}>
                 <h3>All Users</h3>
+                  
+                  {/* Role Filter - Moved to the right end of header */}
                 <select 
-                  className="role-filter"
+                    className="category-filter"
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value)}
+                    style={{
+                      padding: '10px 15px',
+                      border: '1px solid var(--border-light)',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '14px',
+                      backgroundColor: 'white',
+                      color: 'var(--text-dark)',
+                      cursor: 'pointer',
+                      minWidth: '150px',
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                    }}
                 >
                   <option>All Roles</option>
                   <option>Administrator</option>
@@ -523,8 +598,8 @@ export default function UserManagement() {
                 </select>
               </div>
               
-              <div className="users-table">
-                <table>
+                <div className="inventory-table inventory-table-modern">
+                <table className="table-modern">
                   <thead>
                     <tr>
                       <th style={{ width: '50px' }}></th>
@@ -536,24 +611,25 @@ export default function UserManagement() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.length === 0 ? (
+                    {paginatedUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center py-4">
+                        <td colSpan={6} className="text-center py-5">
                           <i className="bi bi-people" style={{ fontSize: '2rem', color: '#cbd5e1' }}></i>
-                          <p className="mt-2 text-muted">No users found</p>
+                          <p className="mt-2 text-muted">
+                            {searchTerm || selectedRole !== 'All Roles' 
+                              ? 'No users found matching your search' 
+                              : 'No users found'}
+                          </p>
+                          {!searchTerm && selectedRole === 'All Roles' && (
                           <p className="text-muted">Click "Add User" to create your first user</p>
+                          )}
                         </td>
                       </tr>
                     ) : (
-                      users
-                        .filter(u => selectedRole === 'All Roles' 
-                          || (selectedRole === 'Administrator' && (u.role === 'ADMIN' || u.role === 'ADMINISTRATOR'))
-                          || (selectedRole === 'Teacher' && u.role === 'TEACHER')
-                        )
-                        .map((user: any) => (
+                      paginatedUsers.map((user: any, index: number) => (
                         <React.Fragment key={user.id}>
                           <tr 
-                            className={expandedRows.has(user.id) ? 'expanded-row' : ''}
+                            className={`${expandedRows.has(user.id) ? 'expanded-row' : ''} ${index % 2 === 0 ? 'even-row' : 'odd-row'}`}
                             onClick={() => toggleRowExpansion(user.id)}
                             style={{ cursor: 'pointer' }}
                           >
@@ -561,32 +637,34 @@ export default function UserManagement() {
                               <i className={`bi ${expandedRows.has(user.id) ? 'bi-chevron-down' : 'bi-chevron-right'}`}></i>
                             </td>
                             <td>
-                              <span className="user-id">#{String(user.id).padStart(3, '0')}</span>
+                              <span className="item-id">#{String(user.id).padStart(3, '0')}</span>
                             </td>
                             <td>
-                              <div className="user-info-cell">
+                              <div className="item-info-cell">
                                 <span>{user.full_name || `${user.first_name} ${user.last_name}`}</span>
                               </div>
                             </td>
                             <td>{user.email}</td>
                             <td>
-                              <span className={`badge ${getRoleBadgeColor(user.role)}`}>
+                              <span className={`badge badge-modern ${getRoleBadgeColor(user.role)}`}>
                                 {user.role}
                               </span>
                             </td>
                             <td>
-                              <div className="action-buttons" onClick={(e) => e.stopPropagation()}>
+                              <div className="action-buttons action-buttons-modern" onClick={(e) => e.stopPropagation()}>
                                 <button 
-                                  className="action-btn-edit"
+                                  className="action-btn-edit action-btn-modern"
                                   onClick={() => handleEditUser(user)}
                                   data-bs-toggle="modal"
                                   data-bs-target="#editUserModal"
+                                  title="Edit User"
                                 >
                                   <i className="bi bi-pencil"></i>
                                 </button>
                                 <button 
-                                  className="action-btn-delete"
-                                  onClick={() => handleDeleteUser(user.id)}
+                                  className="action-btn-delete action-btn-modern"
+                                  onClick={() => handleDeleteUser(user.id, `${user.first_name} ${user.last_name}`)}
+                                  title="Delete User"
                                 >
                                   <i className="bi bi-trash"></i>
                                 </button>
@@ -596,79 +674,77 @@ export default function UserManagement() {
                           {expandedRows.has(user.id) && (
                             <tr className="expanded-details">
                               <td colSpan={6}>
-                                <div className="user-details-grid">
-                                                                     <div className="detail-item profile-photo-section">
-                                     <label>Profile Photo:</label>
-                                                                            <div className="profile-photo-display">
-                                        {user.photo_path ? (
-                                          <>
-                                            <img 
-                                              src={`http://127.0.0.1:8000/${user.photo_path}`}
-                                              alt={user.full_name}
-                                              style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }}
-                                              onError={(e) => {
-                                                console.error('Failed to load profile photo:', user.photo_path)
-                                                e.currentTarget.style.display = 'none'
-                                                e.currentTarget.nextElementSibling?.classList.remove('d-none')
-                                              }}
-                                            />
-                                            <div className="profile-photo-placeholder d-none">
-                                              <i className="bi bi-person-circle" style={{ fontSize: 60, color: '#cbd5e1' }}></i>
-                                            </div>
-                                          </>
-                                        ) : (
-                                          <div className="profile-photo-placeholder">
-                                            <i className="bi bi-person-circle" style={{ fontSize: 60, color: '#cbd5e1' }}></i>
-                                          </div>
-                                        )}
-                                     </div>
-                                   </div>
-                                  
-                                  <div className="user-info-section">
-                                    {/* First Row: First Name, Middle Name, Last Name */}
+                                <div className="item-details-grid">
+                                  <div className="item-info-section">
                                     <div className="info-row">
                                       <div className="detail-item">
-                                        <label>First Name:</label>
+                                        <label>FIRST NAME:</label>
                                         <span>{user.first_name}</span>
                                       </div>
                                       <div className="detail-item">
-                                        <label>Middle Name:</label>
+                                        <label>MIDDLE NAME:</label>
                                         <span>{user.middle_name || '-'}</span>
                                       </div>
                                       <div className="detail-item">
-                                        <label>Last Name:</label>
+                                        <label>LAST NAME:</label>
                                         <span>{user.last_name}</span>
                                       </div>
                                     </div>
                                     
-                                    {/* Second Row: Email, Contact, Role */}
                                     <div className="info-row">
                                       <div className="detail-item">
-                                        <label>Email:</label>
+                                        <label>EMAIL:</label>
                                         <span>{user.email}</span>
                                       </div>
                                       <div className="detail-item">
-                                        <label>Contact Number:</label>
+                                        <label>CONTACT NUMBER:</label>
                                         <span>{user.contact_number || '-'}</span>
                                       </div>
                                       <div className="detail-item">
-                                        <label>Role:</label>
+                                        <label>ROLE:</label>
                                         <span>{user.role}</span>
                                       </div>
                                     </div>
                                     
-                                    {/* Third Row: Address, Birthday */}
                                     <div className="info-row">
                                       <div className="detail-item">
-                                        <label>Address:</label>
+                                        <label>ADDRESS:</label>
                                         <span>{user.address || '-'}</span>
                                       </div>
                                       <div className="detail-item">
-                                        <label>Birthday:</label>
+                                        <label>BIRTHDAY:</label>
                                         <span>{user.birthday ? new Date(user.birthday).toLocaleDateString() : '-'}</span>
                                       </div>
                                       <div className="detail-item">
                                         {/* Empty space to maintain grid alignment */}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="item-photo-qr-section">
+                                    <div className="photo-upload-area">
+                                      <label>PROFILE PHOTO:</label>
+                                      <div className="photo-display">
+                                        {user.photo_path ? (
+                                          <img 
+                                            src={`${getApiBaseUrl()}/${user.photo_path}`}
+                                            alt={user.full_name}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                                            onError={(e) => {
+                                              e.currentTarget.style.display = 'none'
+                                              e.currentTarget.nextElementSibling?.classList.remove('d-none')
+                                            }}
+                                          />
+                                        ) : (
+                                          <div className="photo-placeholder">
+                                            <i className="bi bi-person-circle" style={{ fontSize: '48px', color: '#cbd5e1' }}></i>
+                                            <span>No Photo</span>
+                                          </div>
+                                        )}
+                                        <div className="photo-placeholder d-none">
+                                          <i className="bi bi-person-circle" style={{ fontSize: '48px', color: '#cbd5e1' }}></i>
+                                          <span>No Photo</span>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -681,15 +757,105 @@ export default function UserManagement() {
                     )}
                   </tbody>
                 </table>
+                
+                {/* Pagination Controls - Matching Inventory Style */}
+                {filteredUsers.length > itemsPerPage && (
+                  <div className="inventory-pagination" style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: 'var(--space-4)',
+                    borderTop: '1px solid var(--gray-200)',
+                    marginTop: 'var(--space-4)'
+                  }}>
+                    <div className="pagination-info" style={{
+                      fontSize: '0.875rem',
+                      color: 'var(--gray-600)'
+                    }}>
+                      Showing {startIndex + 1} to {Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} users
+                    </div>
+                    <div className="d-flex gap-2 align-items-center">
+                      <button
+                        className="btn-standard"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: '8px 16px',
+                          fontSize: '0.9rem',
+                          opacity: currentPage === 1 ? 0.5 : 1,
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        <i className="bi bi-chevron-left me-1"></i>
+                        Previous
+                      </button>
+                      <span style={{ 
+                        padding: '8px 12px', 
+                        color: 'var(--gray-700)',
+                        fontSize: '0.9rem',
+                        fontWeight: '500'
+                      }}>
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button
+                        className="btn-standard"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          padding: '8px 16px',
+                          fontSize: '0.9rem',
+                          opacity: currentPage === totalPages ? 0.5 : 1,
+                          cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        Next
+                        <i className="bi bi-chevron-right ms-1"></i>
+                      </button>
               </div>
             </div>
           )}
+              </div>
+            </div>
+            )}
+          </div>
         </div>
       </main>
 
+      {/* Floating Add User Button - Matching Add Item Button Style */}
+      <button
+        className="add-item-btn"
+        data-bs-toggle="modal"
+        data-bs-target="#addUserModal"
+        style={{
+          position: 'fixed',
+          bottom: '30px',
+          right: '30px',
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          borderRadius: '50px',
+          padding: '14px 24px',
+          fontSize: '16px',
+          fontWeight: '500',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          transition: 'all 0.3s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.05)'
+          e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.2)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)'
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)'
+        }}
+      >
+        <i className="bi bi-plus-circle"></i> Add User
+      </button>
+
       {/* Add User Modal */}
       <div className="modal fade" id="addUserModal" tabIndex={-1} aria-labelledby="addUserModalLabel" aria-hidden="true">
-        <div className="modal-dialog modal-lg">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title" id="addUserModalLabel">Add User</h5>
@@ -834,12 +1000,13 @@ export default function UserManagement() {
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button 
+              <LoadingButton 
                 type="button" 
                 className="btn btn-primary"
-                data-bs-dismiss="modal"
                 onClick={handleAddUser}
-              >Save</button>
+                isLoading={isSavingUser}
+                label={isSavingUser ? 'Saving...' : 'Save'}
+              />
             </div>
           </div>
         </div>
@@ -847,7 +1014,7 @@ export default function UserManagement() {
 
       {/* Edit User Modal */}
       <div className="modal fade" id="editUserModal" tabIndex={-1} aria-labelledby="editUserModalLabel" aria-hidden="true">
-        <div className="modal-dialog modal-lg">
+        <div className="modal-dialog modal-dialog-centered modal-lg">
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title" id="editUserModalLabel">Edit User</h5>
@@ -990,15 +1157,37 @@ export default function UserManagement() {
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button 
+              <LoadingButton 
                 type="button" 
                 className="btn btn-primary"
                 onClick={handleUpdateUser}
-              >Update</button>
+                isLoading={isSavingUser}
+                label={isSavingUser ? 'Updating...' : 'Update'}
+              />
             </div>
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          if (!isDeleting) {
+            setShowDeleteConfirm(false)
+            setDeleteUserId(null)
+            setDeleteUserName('')
+          }
+        }}
+        onConfirm={confirmDeleteUser}
+        title="Delete User"
+        message={`Are you sure you want to delete user "${deleteUserName}"?`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="delete"
+        warningMessage="This action cannot be undone. All user data will be permanently removed."
+        isLoading={isDeleting}
+      />
     </div>
   )
 }
