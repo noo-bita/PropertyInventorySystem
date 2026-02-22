@@ -185,50 +185,68 @@ class ItemRequestsController extends Controller
                 'request_data' => $request->all()
             ]);
 
+            $inventoryItem = InventoryItem::findOrFail($itemRequest->item_id);
+            
+            // Check if item is consumable - due date is optional for consumable items
+            $isConsumable = $inventoryItem->consumable ?? false;
+            
             $data = $request->validate([
-                'due_date' => 'required|date|after_or_equal:today',
+                'due_date' => $isConsumable ? 'nullable|date' : 'required|date|after_or_equal:today',
                 'quantity' => 'nullable|integer|min:1'
             ]);
 
-            \Log::info('Validation passed', ['validated_data' => $data]);
-
-            $inventoryItem = InventoryItem::findOrFail($itemRequest->item_id);
+            \Log::info('Validation passed', ['validated_data' => $data, 'is_consumable' => $isConsumable]);
 
             // Set assigned quantity (default to requested if not provided)
             $assignedQuantity = $data['quantity'] ?? $itemRequest->quantity_requested;
 
             \Log::info('Assignment details', [
                 'assigned_quantity' => $assignedQuantity,
-                'due_date' => $data['due_date']
+                'due_date' => $data['due_date'] ?? null,
+                'is_consumable' => $isConsumable
             ]);
 
-            // Items are already reserved when request was created
-            // If admin assigns different quantity, adjust the reservation
-            $reservedQuantity = $itemRequest->quantity_requested;
-            $quantityDifference = $assignedQuantity - $reservedQuantity;
-            
-            // If assigned quantity is less than requested, return the difference
-            if ($quantityDifference < 0) {
-                $inventoryItem->available += abs($quantityDifference);
-                $inventoryItem->save();
-            }
-            // If assigned quantity is more than requested, check if we have enough available
-            elseif ($quantityDifference > 0) {
-                if ($inventoryItem->available < $quantityDifference) {
-                    return response()->json([
-                        'message' => 'Not enough available quantity. Available: ' . $inventoryItem->available . ', Additional needed: ' . $quantityDifference
-                    ], 422);
+            // If item is consumable, delete it from inventory when approved
+            if ($isConsumable) {
+                // Delete the inventory item (or reduce quantity if partial)
+                if ($assignedQuantity >= $inventoryItem->quantity) {
+                    // Delete entire item
+                    $inventoryItem->delete();
+                } else {
+                    // Reduce quantity
+                    $inventoryItem->quantity -= $assignedQuantity;
+                    $inventoryItem->available = max(0, $inventoryItem->available - $assignedQuantity);
+                    $inventoryItem->save();
                 }
-                // Reserve the additional quantity
-                $inventoryItem->available -= $quantityDifference;
-                $inventoryItem->save();
+            } else {
+                // Items are already reserved when request was created
+                // If admin assigns different quantity, adjust the reservation
+                $reservedQuantity = $itemRequest->quantity_requested;
+                $quantityDifference = $assignedQuantity - $reservedQuantity;
+                
+                // If assigned quantity is less than requested, return the difference
+                if ($quantityDifference < 0) {
+                    $inventoryItem->available += abs($quantityDifference);
+                    $inventoryItem->save();
+                }
+                // If assigned quantity is more than requested, check if we have enough available
+                elseif ($quantityDifference > 0) {
+                    if ($inventoryItem->available < $quantityDifference) {
+                        return response()->json([
+                            'message' => 'Not enough available quantity. Available: ' . $inventoryItem->available . ', Additional needed: ' . $quantityDifference
+                        ], 422);
+                    }
+                    // Reserve the additional quantity
+                    $inventoryItem->available -= $quantityDifference;
+                    $inventoryItem->save();
+                }
+                // If quantities match, items are already reserved, no change needed
             }
-            // If quantities match, items are already reserved, no change needed
 
             // Update request status and details
             $itemRequest->status = 'assigned';
             $itemRequest->quantity_assigned = $assignedQuantity;
-            $itemRequest->due_date = $data['due_date'];
+            $itemRequest->due_date = $data['due_date'] ?? null; // Null for consumable items
             $itemRequest->assigned_at = now();
             $itemRequest->save();
 

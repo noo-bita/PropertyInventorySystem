@@ -22,12 +22,14 @@ class InventoryItem extends Model
         'added_by',
         'status',
         'photo',
+        'consumable',
         'last_updated'
     ];
 
     protected $casts = [
         'purchase_date' => 'date',
         'last_updated' => 'date',
-        'purchase_price' => 'decimal:2'
+        'purchase_price' => 'decimal:2',
+        'consumable' => 'boolean'
     ];
 }

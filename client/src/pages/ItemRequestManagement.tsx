@@ -32,6 +32,7 @@ const ItemRequestManagement = () => {
   // Approval fields (for approve action)
   const [approvalDueDate, setApprovalDueDate] = useState('')
   const [approvalQuantity, setApprovalQuantity] = useState(1)
+  const [isItemConsumable, setIsItemConsumable] = useState(false)
   
   // Dropdown expansion state
   const [expandedRequests, setExpandedRequests] = useState<Set<number>>(new Set())
@@ -41,6 +42,38 @@ const ItemRequestManagement = () => {
     setLoading(true)
     loadRequests()
   }, [location.pathname, currentUser])
+
+  // Check consumable status when modal opens and selectedRequest changes
+  useEffect(() => {
+    if (showResponseModal && selectedRequest?.item_id) {
+      const checkConsumableStatus = async () => {
+        try {
+          const itemResponse = await apiFetch(`/api/inventory/${selectedRequest.item_id}`)
+          if (itemResponse.ok) {
+            const item = await itemResponse.json()
+            const consumable = item.consumable
+            const consumableStatus = consumable === true || consumable === 1 || consumable === '1' || consumable === 'true'
+            
+            console.log('🔄 useEffect: Checking consumable status:', {
+              item_id: selectedRequest.item_id,
+              consumable_raw: consumable,
+              consumable_bool: consumableStatus
+            })
+            
+            setIsItemConsumable(consumableStatus)
+            
+            if (consumableStatus) {
+              setApprovalDueDate('')
+            }
+          }
+        } catch (error) {
+          console.error('❌ useEffect: Error checking consumable status:', error)
+        }
+      }
+      
+      checkConsumableStatus()
+    }
+  }, [showResponseModal, selectedRequest?.item_id])
 
   const loadRequests = async () => {
     if (!currentUser) {
@@ -69,27 +102,65 @@ const ItemRequestManagement = () => {
         const requestsData = await requestsResponse.json()
         const inventoryData = await inventoryResponse.json()
         
-        // Create a Set of inventory item IDs for quick lookup
-        const inventoryItemIds = new Set(
-          inventoryData.map((item: any) => item.id)
+        // Create a Map of inventory item ID to item data (including consumable status)
+        const inventoryItemMap = new Map(
+          inventoryData.map((item: any) => [item.id, item])
         )
+        
+        // Create a Set of inventory item IDs for quick lookup
+        const inventoryItemIds = new Set(inventoryItemMap.keys())
         
         // Filter only pending item requests (exclude all responded/completed requests)
         // Also filter out requests where the inventory item no longer exists
-        const itemRequests = requestsData.filter((r: any) => {
-          const isItemRequest = r.request_type === 'item' || !r.request_type
-          const isPending = String(r.status).toLowerCase() === 'pending'
-          
-          // If item_id is null, it's a custom request - skip it (item requests should have item_id)
-          if (r.item_id === null || r.item_id === undefined) {
-            return false
-          }
-          
-          // If item_id exists, check if it's in the inventory
-          const itemExists = inventoryItemIds.has(r.item_id)
-          
-          return isItemRequest && isPending && itemExists
-        })
+        const itemRequests = requestsData
+          .filter((r: any) => {
+            const isItemRequest = r.request_type === 'item' || !r.request_type
+            const isPending = String(r.status).toLowerCase() === 'pending'
+            
+            // If item_id is null, it's a custom request - skip it (item requests should have item_id)
+            if (r.item_id === null || r.item_id === undefined) {
+              return false
+            }
+            
+            // If item_id exists, check if it's in the inventory
+            const itemExists = inventoryItemIds.has(r.item_id)
+            
+            return isItemRequest && isPending && itemExists
+          })
+          .map((r: any) => {
+            // Attach consumable status to each request
+            const item = inventoryItemMap.get(r.item_id)
+            
+            // Debug: Log if item is not found in map
+            if (!item && r.item_id) {
+              console.warn('Item not found in inventory map for request:', {
+                request_id: r.id,
+                item_id: r.item_id,
+                item_name: r.item_name
+              })
+            }
+            
+            // Convert to boolean explicitly (handles 0/1, "true"/"false", null, undefined)
+            const consumable = item?.consumable
+            const consumableBool = consumable === true || consumable === 1 || consumable === '1' || consumable === 'true'
+            
+            // Debug logging for consumable items
+            if (consumableBool) {
+              console.log('✅ Attached consumable status to request:', {
+                request_id: r.id,
+                item_id: r.item_id,
+                item_name: r.item_name,
+                consumable_raw: consumable,
+                consumable_type: typeof consumable,
+                consumable_bool: consumableBool
+              })
+            }
+            
+            return {
+              ...r,
+              item_consumable: consumableBool
+            }
+          })
         setRequests(itemRequests)
       }
     } catch (error) {
@@ -111,27 +182,65 @@ const ItemRequestManagement = () => {
         const requestsData = await requestsResponse.json()
         const inventoryData = await inventoryResponse.json()
         
-        // Create a Set of inventory item IDs for quick lookup
-        const inventoryItemIds = new Set(
-          inventoryData.map((item: any) => item.id)
+        // Create a Map of inventory item ID to item data (including consumable status)
+        const inventoryItemMap = new Map(
+          inventoryData.map((item: any) => [item.id, item])
         )
+        
+        // Create a Set of inventory item IDs for quick lookup
+        const inventoryItemIds = new Set(inventoryItemMap.keys())
         
         // Filter only pending item requests (exclude all responded/completed requests)
         // Also filter out requests where the inventory item no longer exists
-        const itemRequests = requestsData.filter((r: any) => {
-          const isItemRequest = r.request_type === 'item' || !r.request_type
-          const isPending = String(r.status).toLowerCase() === 'pending'
-          
-          // If item_id is null, it's a custom request - skip it (item requests should have item_id)
-          if (r.item_id === null || r.item_id === undefined) {
-            return false
-          }
-          
-          // If item_id exists, check if it's in the inventory
-          const itemExists = inventoryItemIds.has(r.item_id)
-          
-          return isItemRequest && isPending && itemExists
-        })
+        const itemRequests = requestsData
+          .filter((r: any) => {
+            const isItemRequest = r.request_type === 'item' || !r.request_type
+            const isPending = String(r.status).toLowerCase() === 'pending'
+            
+            // If item_id is null, it's a custom request - skip it (item requests should have item_id)
+            if (r.item_id === null || r.item_id === undefined) {
+              return false
+            }
+            
+            // If item_id exists, check if it's in the inventory
+            const itemExists = inventoryItemIds.has(r.item_id)
+            
+            return isItemRequest && isPending && itemExists
+          })
+          .map((r: any) => {
+            // Attach consumable status to each request
+            const item = inventoryItemMap.get(r.item_id)
+            
+            // Debug: Log if item is not found in map
+            if (!item && r.item_id) {
+              console.warn('Item not found in inventory map for request:', {
+                request_id: r.id,
+                item_id: r.item_id,
+                item_name: r.item_name
+              })
+            }
+            
+            // Convert to boolean explicitly (handles 0/1, "true"/"false", null, undefined)
+            const consumable = item?.consumable
+            const consumableBool = consumable === true || consumable === 1 || consumable === '1' || consumable === 'true'
+            
+            // Debug logging for consumable items
+            if (consumableBool) {
+              console.log('✅ Attached consumable status to request:', {
+                request_id: r.id,
+                item_id: r.item_id,
+                item_name: r.item_name,
+                consumable_raw: consumable,
+                consumable_type: typeof consumable,
+                consumable_bool: consumableBool
+              })
+            }
+            
+            return {
+              ...r,
+              item_consumable: consumableBool
+            }
+          })
         setRequests(itemRequests)
       }
     } catch (error) {
@@ -151,14 +260,71 @@ const ItemRequestManagement = () => {
     })
   }
 
-  const openResponseModal = (request: any) => {
+  const openResponseModal = async (request: any) => {
     setSelectedRequest(request)
     setAdminRemarks('')
     setApprovalDueDate('')
     setApprovalQuantity(request.quantity_requested || 1)
+    
+    // Always check inventory item directly to see if it's consumable
+    let consumableStatus = false
+    
+    if (request.item_id) {
+      try {
+        // Fetch the inventory item to check consumable status
+        const itemResponse = await apiFetch(`/api/inventory/${request.item_id}`)
+        if (itemResponse.ok) {
+          const item = await itemResponse.json()
+          const consumable = item.consumable
+          
+          // Convert to boolean explicitly (handles 0/1, "true"/"false", null, undefined, boolean)
+          consumableStatus = consumable === true || consumable === 1 || consumable === '1' || consumable === 'true'
+          
+          console.log('✅ Checked inventory item consumable status:', {
+            item_id: request.item_id,
+            item_name: item.name,
+            consumable_raw: consumable,
+            consumable_type: typeof consumable,
+            consumable_bool: consumableStatus,
+            is_consumable: consumableStatus ? 'YES - Due date will be disabled' : 'NO - Due date will be enabled'
+          })
+        } else {
+          console.warn('⚠️ Failed to fetch inventory item from API for item_id:', request.item_id)
+          consumableStatus = false
+        }
+      } catch (error) {
+        console.error('❌ Error fetching inventory item:', error)
+        consumableStatus = false
+      }
+    } else {
+      console.warn('⚠️ No item_id in request, cannot check consumable status')
+      consumableStatus = false
+    }
+    
+    // Set the consumable status BEFORE opening the modal
+    console.log('🔧 Setting isItemConsumable state to:', consumableStatus, 'for item_id:', request.item_id)
+    setIsItemConsumable(consumableStatus)
+    
+    // Clear due date if item is consumable
+    if (consumableStatus) {
+      setApprovalDueDate('')
+      console.log('🔒 Due date cleared and will be disabled for consumable item')
+    } else {
+      console.log('🔓 Due date will be enabled for non-consumable item')
+    }
+    
+    // Open modal first, then useEffect will double-check the status
     setShowResponseModal(true)
     setShowConfirmation(false)
     setPendingAction(null)
+    
+    // Force a state update after a brief delay to ensure React re-renders
+    setTimeout(() => {
+      setIsItemConsumable(prev => {
+        console.log('🔄 Force update: isItemConsumable was', prev, 'setting to', consumableStatus)
+        return consumableStatus
+      })
+    }, 50)
   }
 
   const handleResponseAction = (action: 'approve' | 'reject') => {
@@ -177,7 +343,8 @@ const ItemRequestManagement = () => {
     setIsProcessing(true)
     try {
       if (pendingAction === 'approve') {
-        if (!approvalDueDate) {
+        // Due date is only required for non-consumable items
+        if (!isItemConsumable && !approvalDueDate) {
           showNotification('Please select a due date', 'error')
           setIsProcessing(false)
           return
@@ -186,7 +353,7 @@ const ItemRequestManagement = () => {
         const res = await apiFetch(`/api/requests/${selectedRequest.id}/approve-and-assign`, {
           method: 'POST',
           body: JSON.stringify({
-            due_date: approvalDueDate,
+            due_date: isItemConsumable ? null : approvalDueDate, // Null for consumable items
             quantity: approvalQuantity
           })
         })
@@ -232,6 +399,7 @@ const ItemRequestManagement = () => {
       setAdminRemarks('')
       setApprovalDueDate('')
       setApprovalQuantity(1)
+      setIsItemConsumable(false)
       setShowConfirmation(false)
       setPendingAction(null)
     }
@@ -673,28 +841,73 @@ const ItemRequestManagement = () => {
                       <div className="row mb-4">
                         <div className="col-md-6">
                           <div className="mb-3">
-                            <label className="form-label" style={{ fontWeight: '500', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
-                              Due Date <span className="text-danger">*</span>
+                            <label className="form-label" style={{ fontWeight: '500', color: 'var(--gray-700)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span>Due Date {!isItemConsumable && <span className="text-danger">*</span>}</span>
+                              {isItemConsumable && (
+                                <span className="badge bg-warning" style={{ fontSize: '0.75rem' }}>Consumable Item</span>
+                              )}
                             </label>
                             <input
+                              key={`due-date-${selectedRequest.item_id}-${isItemConsumable}`}
                               type="date"
-                              value={approvalDueDate}
-                              onChange={(e) => setApprovalDueDate(e.target.value)}
+                              value={isItemConsumable ? '' : approvalDueDate}
+                              onChange={(e) => {
+                                if (!isItemConsumable) {
+                                  setApprovalDueDate(e.target.value)
+                                } else {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  setApprovalDueDate('')
+                                  return false
+                                }
+                              }}
+                              onClick={(e) => {
+                                if (isItemConsumable) {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  return false
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (isItemConsumable) {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  return false
+                                }
+                              }}
                               className="form-control"
                               min={new Date().toISOString().split('T')[0]}
+                              disabled={isItemConsumable}
+                              readOnly={isItemConsumable}
+                              tabIndex={isItemConsumable ? -1 : 0}
+                              aria-disabled={isItemConsumable}
                               style={{
                                 border: '2px solid var(--gray-300)',
                                 borderRadius: '8px',
                                 fontSize: '0.9375rem',
-                                transition: 'border-color 0.2s'
+                                transition: 'border-color 0.2s',
+                                backgroundColor: isItemConsumable ? '#e9ecef' : '#ffffff',
+                                cursor: isItemConsumable ? 'not-allowed' : 'text',
+                                opacity: isItemConsumable ? 0.6 : 1,
+                                pointerEvents: isItemConsumable ? 'none' : 'auto',
+                                userSelect: isItemConsumable ? 'none' : 'auto'
                               }}
                               onFocus={(e) => {
-                                e.currentTarget.style.borderColor = '#16a34a'
+                                if (!isItemConsumable) {
+                                  e.currentTarget.style.borderColor = '#16a34a'
+                                } else {
+                                  e.currentTarget.blur()
+                                }
                               }}
                               onBlur={(e) => {
                                 e.currentTarget.style.borderColor = 'var(--gray-300)'
                               }}
                             />
+                            {isItemConsumable && (
+                              <small className="form-text text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
+                                Consumable items do not require a due date as they will be removed from inventory when approved.
+                              </small>
+                            )}
                           </div>
                         </div>
                         <div className="col-md-6">
@@ -772,8 +985,12 @@ const ItemRequestManagement = () => {
                             type="button"
                             className="btn"
                             onClick={() => {
-                              if (!approvalDueDate || approvalQuantity < 1) {
-                                showNotification('Please fill in the due date and quantity before approving', 'error')
+                              // Due date is only required for non-consumable items
+                              if ((!isItemConsumable && !approvalDueDate) || approvalQuantity < 1) {
+                                const message = isItemConsumable 
+                                  ? 'Please fill in the quantity before approving'
+                                  : 'Please fill in the due date and quantity before approving'
+                                showNotification(message, 'error')
                                 return
                               }
                               handleResponseAction('approve')

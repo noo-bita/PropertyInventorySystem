@@ -10,6 +10,10 @@ const CustomRequestPage = () => {
   const { user: currentUser } = useAuth()
   const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  
+  // Pagination state for teacher view
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   useEffect(() => {
     const fetchRequests = async () => {
@@ -58,6 +62,8 @@ const CustomRequestPage = () => {
           const requestsData = await requestsResponse.json()
           const teacherRequests = requestsData.filter((r: any) => r.teacher_id === currentUser?.id)
           setRequests(teacherRequests)
+          // Reset to first page when requests are refreshed
+          setCurrentPage(1)
         }
       }
     } catch (error) {
@@ -194,6 +200,12 @@ const CustomRequestPage = () => {
   const TeacherView = () => {
     const myRequests = requests // Already filtered for current teacher
     
+    // Pagination calculations
+    const totalPages = Math.ceil(myRequests.length / itemsPerPage)
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    const paginatedRequests = myRequests.slice(startIndex, endIndex)
+    
     return (
       <>
         {/* Custom Request Form Section */}
@@ -240,7 +252,7 @@ const CustomRequestPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {myRequests.map((request: any, index: number) => (
+                    {paginatedRequests.map((request: any, index: number) => (
                       <tr key={request.id} className={index % 2 === 0 ? 'even-row' : 'odd-row'}>
                         <td>{request.id}</td>
                         <td>{request.item_name}</td>
@@ -286,6 +298,66 @@ const CustomRequestPage = () => {
                   </tbody>
                 </table>
               </div>
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="inventory-pagination" style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: 'var(--space-4)',
+                  borderTop: '1px solid var(--gray-200)',
+                  marginTop: 'var(--space-4)'
+                }}>
+                  <div className="pagination-info" style={{
+                    fontSize: '0.875rem',
+                    color: 'var(--gray-600)'
+                  }}>
+                    Showing {startIndex + 1} to {Math.min(endIndex, myRequests.length)} of {myRequests.length} requests
+                  </div>
+                  
+                  <div className="pagination-controls" style={{
+                    display: 'flex',
+                    gap: 'var(--space-2)',
+                    alignItems: 'center'
+                  }}>
+                    <button
+                      className="btn-standard btn-outline-primary"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      style={{
+                        opacity: currentPage === 1 ? 0.5 : 1,
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <i className="bi bi-chevron-left"></i>
+                      Previous
+                    </button>
+                    
+                    <div className="pagination-page-info" style={{
+                      padding: '0 var(--space-3)',
+                      fontSize: '0.875rem',
+                      color: 'var(--gray-600)',
+                      fontWeight: '500'
+                    }}>
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    
+                    <button
+                      className="btn-standard btn-outline-primary"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      style={{
+                        opacity: currentPage === totalPages ? 0.5 : 1,
+                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next
+                      <i className="bi bi-chevron-right"></i>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

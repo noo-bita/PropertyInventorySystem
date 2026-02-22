@@ -444,7 +444,8 @@ export default function Inventory() {
         supplier: itemData.supplier ?? editingItem.supplier ?? '',
         added_by: itemData.addedBy || editingItem.addedBy || 'Admin User',
         status: itemData.status || editingItem.status || 'Available',
-        photo: itemData.photo || editingItem.photo
+        photo: itemData.photo || editingItem.photo,
+        consumable: itemData.consumable !== undefined ? (itemData.consumable === true || itemData.consumable === 'consumable') : (editingItem.consumable || false)
       }
       
       
@@ -521,7 +522,8 @@ export default function Inventory() {
          supplier: itemData.supplier || '',
          added_by: itemData.addedBy || currentUserName,
          status: itemData.status || 'Available',
-         photo: itemData.photo
+         photo: itemData.photo,
+         consumable: itemData.consumable === true || itemData.consumable === 'consumable'
        }
 
 

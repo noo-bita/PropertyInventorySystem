@@ -16,6 +16,7 @@ import CustomRequestManagement from './pages/CustomRequestManagement'
 import ActivityLog from './pages/ActivityLog'
 import Suppliers from './pages/Suppliers'
 import ReturnReview from './pages/ReturnReview'
+import Notifications from './pages/Notifications'
 import './App.css'
 import { AuthProvider, useAuth } from './context/AuthContext'
 
@@ -77,6 +78,7 @@ function App() {
           <Route path="/users" element={<Protected roles={['ADMIN']}><UserManagement /></Protected>} />
           <Route path="/reports" element={<Protected roles={['ADMIN']}><Reports /></Protected>} />
           <Route path="/activity-log" element={<Protected roles={['ADMIN']}><ActivityLog /></Protected>} />
+          <Route path="/notifications" element={<Protected roles={['ADMIN']}><Notifications /></Protected>} />
           <Route path="/settings" element={<Protected roles={['ADMIN','TEACHER']}><Settings /></Protected>} />
         </Routes>
       </BrowserRouter>

@@ -44,7 +44,8 @@ class InventoryController extends Controller
             'supplier' => 'nullable|string|max:255',
             'added_by' => 'nullable|string|max:255',
             'status' => 'nullable|string|max:255',
-            'photo' => 'nullable|string'
+            'photo' => 'nullable|string',
+            'consumable' => 'nullable|boolean'
         ]);
 
         // Validate secondary_category is different from primary category
@@ -132,6 +133,7 @@ class InventoryController extends Controller
                 'supplier' => $request->supplier,
                 'added_by' => $request->added_by ?? 'Admin User',
                 'status' => $request->status ?? 'Available',
+                'consumable' => $request->consumable ?? false,
                 'last_updated' => now()->toDateString()
             ];
 
@@ -215,6 +217,7 @@ class InventoryController extends Controller
                 'supplier' => $request->supplier,
                 'added_by' => $request->added_by ?? 'Admin User',
                 'status' => $request->status ?? 'Available',
+                'consumable' => $request->consumable ?? false,
                 'last_updated' => now()->toDateString()
             ];
 
@@ -344,7 +347,8 @@ class InventoryController extends Controller
             'supplier' => 'nullable|string|max:255',
             'added_by' => 'required|string|max:255',
             'status' => 'required|in:Available,Low Stock,Out of Stock',
-            'photo' => 'nullable|string'
+            'photo' => 'nullable|string',
+            'consumable' => 'nullable|boolean'
         ]);
 
         // Validate secondary_category is different from primary category
@@ -642,13 +646,14 @@ class InventoryController extends Controller
             'purchase_price' => 'nullable|numeric|min:0',
             'purchase_type' => 'nullable|in:purchased,donated',
             'supplier' => 'nullable|string|max:255',
-            'status' => 'nullable|in:Available,Low Stock,Out of Stock,Under Maintenance,Damaged'
+            'status' => 'nullable|in:Available,Low Stock,Out of Stock,Under Maintenance,Damaged',
+            'consumable' => 'nullable|boolean'
         ]);
 
         $itemIds = $request->item_ids;
         $updateData = $request->only([
             'name', 'category', 'secondary_category', 'location', 'description',
-            'purchase_date', 'purchase_price', 'purchase_type', 'supplier', 'status'
+            'purchase_date', 'purchase_price', 'purchase_type', 'supplier', 'status', 'consumable'
         ]);
 
         // Remove null values to only update provided fields

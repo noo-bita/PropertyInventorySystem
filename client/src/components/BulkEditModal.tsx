@@ -36,7 +36,8 @@ export default function BulkEditModal({
     purchase_price: '',
     purchase_type: 'purchased',
     supplier: '',
-    status: 'Available'
+    status: 'Available',
+    consumable: false
   })
 
   const navigate = useNavigate()
@@ -141,7 +142,8 @@ export default function BulkEditModal({
         purchase_price: firstItem.purchase_price || '',
         purchase_type: firstItem.purchase_type || 'purchased',
         supplier: firstItem.supplier || '',
-        status: firstItem.status || 'Available'
+        status: firstItem.status || 'Available',
+        consumable: firstItem.consumable === true || firstItem.consumable === 1 || firstItem.consumable === '1' || firstItem.consumable === 'true'
       })
       // Reset input modes
       setShowNewSupplierInput(false)
@@ -196,6 +198,7 @@ export default function BulkEditModal({
     if (editForm.purchase_type) updateData.purchase_type = editForm.purchase_type
     if (editForm.supplier !== undefined) updateData.supplier = editForm.supplier
     if (editForm.status) updateData.status = editForm.status
+    if (editForm.consumable !== undefined) updateData.consumable = editForm.consumable === true || editForm.consumable === 'consumable'
 
     await onSave(updateData)
   }
@@ -755,6 +758,40 @@ export default function BulkEditModal({
                     Purchase price is not applicable for donated items
                   </small>
                 )}
+              </div>
+
+              {/* Item Type (Consumable/Reusable) */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  Item Type
+                </label>
+                <select
+                  value={editForm.consumable === true ? 'consumable' : 'reusable'}
+                  onChange={(e) => handleInputChange('consumable', e.target.value === 'consumable')}
+                  disabled={isSubmitting}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #ced4da',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    backgroundColor: 'white',
+                    color: '#212529'
+                  }}
+                  className="edit-input"
+                >
+                  <option value="reusable">Reusable</option>
+                  <option value="consumable">Consumable</option>
+                </select>
+                <small style={{ 
+                  display: 'block', 
+                  marginTop: '0.25rem', 
+                  fontSize: '0.75rem', 
+                  color: '#6c757d',
+                  fontStyle: 'italic'
+                }}>
+                  Consumable items will be removed from inventory when approved for a request. Reusable items can be returned.
+                </small>
               </div>
 
             </div>

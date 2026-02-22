@@ -986,6 +986,38 @@ export default function InventoryFormModal({
                 )}
               </div>
 
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  Item Type
+                </label>
+                <select
+                  value={newItem.consumable === true ? 'consumable' : newItem.consumable === false ? 'reusable' : 'reusable'}
+                  onChange={(e) => handleInputChange('consumable', e.target.value === 'consumable')}
+                  disabled={isSubmitting}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #ced4da',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    backgroundColor: '#ffffff',
+                    color: '#212529'
+                  }}
+                >
+                  <option value="reusable">Reusable</option>
+                  <option value="consumable">Consumable</option>
+                </select>
+                <small style={{ 
+                  display: 'block', 
+                  marginTop: '0.25rem', 
+                  fontSize: '0.75rem', 
+                  color: '#6c757d',
+                  fontStyle: 'italic'
+                }}>
+                  Consumable items will be removed from inventory when approved for a request. Reusable items can be returned.
+                </small>
+              </div>
+
             <div style={{ gridColumn: '1 / -1' }}>
               {/* Item Photo & QR Code Section - Title above all three columns */}
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>

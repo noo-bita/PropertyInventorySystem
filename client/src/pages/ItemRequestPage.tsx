@@ -20,6 +20,7 @@ interface InventoryItem {
   isGrouped?: boolean
   groupedItems?: InventoryItem[]
   secondary_category?: string
+  consumable?: boolean
 }
 
 const ItemRequestPage = () => {
@@ -47,7 +48,8 @@ const ItemRequestPage = () => {
     location: item.location || item.item_location,
     quantity: item.quantity || item.item_quantity || 0,
     status: item.status || item.item_status || 'Available',
-    description: item.description || item.item_description
+    description: item.description || item.item_description,
+    consumable: item.consumable ?? false
   })
 
   // Group items by name (same logic as admin inventory)

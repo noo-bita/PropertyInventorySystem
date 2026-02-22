@@ -763,7 +763,7 @@ const CustomRequestManagement = () => {
                             }}
                           >
                             <i className="bi bi-check-circle"></i>
-                            Approve
+                            Approved
                           </button>
                           
                           <button
@@ -798,7 +798,7 @@ const CustomRequestManagement = () => {
                             }}
                           >
                             <i className="bi bi-x-circle"></i>
-                            Disapprove
+                            Disapproved
                           </button>
                         </>
                       )}
@@ -837,7 +837,7 @@ const CustomRequestManagement = () => {
                           }}
                         >
                           <i className="bi bi-x-circle"></i>
-                          Disapprove
+                          Disapproved
                         </button>
                       )}
                     </div>

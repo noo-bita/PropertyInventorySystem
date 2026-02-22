@@ -63,11 +63,13 @@ export default function Suppliers() {
     contact_number: '',
     email: '',
     address: '',
-    business_registration_number: '',
     notes: '',
     status: 'active' as 'active' | 'inactive',
     type: 'supplier' as 'supplier' | 'donor'
   })
+  
+  // Store original data for comparison when editing
+  const [originalFormData, setOriginalFormData] = useState<typeof formData | null>(null)
 
   // Load suppliers on page load and when filters change
   useEffect(() => {
@@ -161,11 +163,29 @@ export default function Suppliers() {
       contact_number: '',
       email: '',
       address: '',
-      business_registration_number: '',
       notes: '',
       status: 'active',
       type: 'supplier'
     })
+    setOriginalFormData(null)
+  }
+  
+  // Check if form data has changed from original
+  const hasFormChanged = (): boolean => {
+    if (!editingSupplier || !originalFormData) return false
+    
+    // Compare all fields
+    return (
+      formData.supplier_name !== originalFormData.supplier_name ||
+      formData.company_name !== originalFormData.company_name ||
+      formData.contact_person !== originalFormData.contact_person ||
+      formData.contact_number !== originalFormData.contact_number ||
+      formData.email !== originalFormData.email ||
+      formData.address !== originalFormData.address ||
+      formData.notes !== originalFormData.notes ||
+      formData.status !== originalFormData.status ||
+      formData.type !== originalFormData.type
+    )
   }
 
   const handleAddSupplier = () => {
@@ -183,18 +203,19 @@ export default function Suppliers() {
   }
 
   const handleEditSupplier = (supplier: Supplier) => {
-    setFormData({
+    const initialFormData = {
       supplier_name: supplier.supplier_name,
       company_name: supplier.company_name || '',
       contact_person: supplier.contact_person || '',
       contact_number: supplier.contact_number || '',
       email: supplier.email || '',
       address: supplier.address || '',
-      business_registration_number: supplier.business_registration_number || '',
       notes: supplier.notes || '',
       status: supplier.status,
       type: supplier.type || 'supplier'
-    })
+    }
+    setFormData(initialFormData)
+    setOriginalFormData(initialFormData)
     setEditingSupplier(supplier)
     setShowEditModal(true)
   }
@@ -223,15 +244,9 @@ export default function Suppliers() {
       
       // Prepare payload - remove type field for donors (not needed in backend)
       const payload: any = { ...formData }
-      if (!isDonor) {
-        // Only include business_registration_number for suppliers
-        if (!payload.business_registration_number) {
-          delete payload.business_registration_number
-        }
-      } else {
-        // Remove business_registration_number for donors
-        delete payload.business_registration_number
-        delete payload.type // Don't send type to donor endpoint
+      if (isDonor) {
+        // Remove type field for donors (not needed in backend)
+        delete payload.type
       }
       
       const response = await apiFetch(url, {
@@ -723,16 +738,6 @@ export default function Suppliers() {
                         disabled={isSubmitting}
                       />
                     </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Business Registration Number</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={formData.business_registration_number}
-                        onChange={(e) => setFormData({ ...formData, business_registration_number: e.target.value })}
-                        disabled={isSubmitting}
-                      />
-                    </div>
                     <div className="col-12 mb-3">
                       <label className="form-label">Address</label>
                       <textarea
@@ -1054,16 +1059,6 @@ export default function Suppliers() {
                             disabled={isSubmitting}
                           />
                         </div>
-                        <div className="col-md-6 mb-3">
-                          <label className="form-label">Business Registration Number</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={formData.business_registration_number}
-                            onChange={(e) => setFormData({ ...formData, business_registration_number: e.target.value })}
-                            disabled={isSubmitting}
-                          />
-                        </div>
                       </>
                     )}
                     {formData.type === 'donor' && (
@@ -1166,7 +1161,7 @@ export default function Suppliers() {
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !hasFormChanged()}
                   >
                     {isSubmitting ? 'Updating...' : `Update ${formData.type === 'donor' ? 'Donor' : 'Supplier'}`}
                   </button>

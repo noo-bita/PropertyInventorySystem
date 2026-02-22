@@ -351,7 +351,13 @@ const AdminNotificationDropdown: React.FC<AdminNotificationDropdownProps> = ({ c
 
           {notifications.length > 0 && (
             <div className="notification-footer">
-              <button className="notification-footer-btn" onClick={() => setIsOpen(false)}>
+              <button 
+                className="notification-footer-btn" 
+                onClick={() => {
+                  setIsOpen(false)
+                  navigate('/notifications')
+                }}
+              >
                 See previous notifications
               </button>
             </div>

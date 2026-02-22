@@ -27,6 +27,7 @@ const ReturnReview = () => {
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [pendingAction, setPendingAction] = useState<'approve' | 'reject' | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isDamaged, setIsDamaged] = useState(false)
 
   // Reset loading when navigating to this page
   useEffect(() => {
@@ -90,12 +91,19 @@ const ReturnReview = () => {
   const openResponseModal = (item: any) => {
     setSelectedItem(item)
     setAdminRemarks('')
+    setIsDamaged(false)
     setShowResponseModal(true)
     setShowConfirmation(false)
     setPendingAction(null)
   }
 
   const handleResponseAction = (action: 'approve' | 'reject') => {
+    // Validate: if damaged is checked, admin remarks are required
+    if (isDamaged && !adminRemarks.trim()) {
+      showNotification('Please provide a description of the damage in Admin Remarks', 'error')
+      return
+    }
+    
     // Show confirmation dialog for both actions
     setPendingAction(action)
     setShowConfirmation(true)
@@ -106,7 +114,11 @@ const ReturnReview = () => {
 
     setIsProcessing(true)
     try {
-      if (pendingAction === 'approve') {
+      // If admin checked "damaged" when approving, treat it as a reject (mark as damaged)
+      const shouldMarkAsDamaged = pendingAction === 'approve' ? isDamaged : true
+      
+      if (pendingAction === 'approve' && !isDamaged) {
+        // Approve - item has no damage, return to inventory
         const response = await apiFetch(`/api/requests/${selectedItem.id}/inspection/accept`, {
           method: 'POST',
           body: JSON.stringify({
@@ -123,26 +135,29 @@ const ReturnReview = () => {
           const errorData = await response.json()
           showNotification(errorData.message || 'Failed to approve return', 'error')
         }
-      } else if (pendingAction === 'reject') {
-        // Use reject endpoint - item stays assigned to teacher with Damaged status
+      } else {
+        // Reject or approve with damage - item stays assigned to teacher with Damaged status
         const response = await apiFetch(`/api/requests/${selectedItem.id}/inspection/reject`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            admin_response: adminRemarks || null
+            admin_response: adminRemarks || (isDamaged && pendingAction === 'approve' ? 'Item marked as damaged by admin during inspection.' : null)
           })
         })
 
         if (response.ok) {
-          showNotification('Return rejected successfully!', 'success')
+          const message = pendingAction === 'approve' && isDamaged 
+            ? 'Item marked as damaged and returned to teacher.'
+            : 'Return rejected successfully!'
+          showNotification(message, 'success')
           // Remove from list immediately
           setPendingItems(prev => prev.filter(item => item.id !== selectedItem.id))
           closeResponseModal()
         } else {
           const errorData = await response.json()
-          showNotification(errorData.message || 'Failed to reject return', 'error')
+          showNotification(errorData.message || 'Failed to process return', 'error')
         }
       }
     } catch (error) {
@@ -163,6 +178,7 @@ const ReturnReview = () => {
       setShowResponseModal(false)
       setSelectedItem(null)
       setAdminRemarks('')
+      setIsDamaged(false)
       setShowConfirmation(false)
       setPendingAction(null)
     }
@@ -492,17 +508,63 @@ const ReturnReview = () => {
                       )}
                     </div>
 
+                    {/* Damage Status Checkbox */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <label style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.75rem',
+                        cursor: 'pointer',
+                        padding: '0.75rem',
+                        borderRadius: '8px',
+                        border: '2px solid #e2e8f0',
+                        transition: 'all 0.2s ease',
+                        backgroundColor: isDamaged ? '#fef2f2' : '#ffffff'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#16a34a'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#e2e8f0'
+                      }}
+                      onClick={() => setIsDamaged(!isDamaged)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isDamaged}
+                          onChange={(e) => setIsDamaged(e.target.checked)}
+                          style={{ 
+                            width: '20px', 
+                            height: '20px', 
+                            cursor: 'pointer',
+                            accentColor: '#ef4444'
+                          }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontWeight: '500', color: '#1e293b', display: 'block' }}>
+                            Item is damaged or has issues
+                          </span>
+                          <span style={{ fontSize: '0.875rem', color: '#64748b' }}>
+                            Check this box if the item is damaged, broken, or has any issues (even if teacher didn't mark it)
+                          </span>
+                        </div>
+                        {isDamaged && (
+                          <i className="bi bi-exclamation-triangle-fill" style={{ color: '#ef4444', fontSize: '1.25rem' }}></i>
+                        )}
+                      </label>
+                    </div>
+
                     {/* Optional Admin Remarks */}
                     <div className="mb-4">
                       <label className="form-label" style={{ fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-                        Admin Remarks (Optional)
+                        Admin Remarks (Optional) {isDamaged && <span style={{ color: '#ef4444' }}>*</span>}
                       </label>
                       <textarea
                         className="form-control"
                         rows={4}
                         value={adminRemarks}
                         onChange={(e) => setAdminRemarks(e.target.value)}
-                        placeholder="Add any remarks or notes for the teacher..."
+                        placeholder={isDamaged ? "Please describe the damage or issues with the item..." : "Add any remarks or notes for the teacher..."}
                         style={{
                           border: '2px solid #d1d5db',
                           borderRadius: '8px',
@@ -517,7 +579,10 @@ const ReturnReview = () => {
                         }}
                       />
                       <small className="form-text text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                        This message will be sent to the returning teacher
+                        {isDamaged 
+                          ? 'Required: Please provide details about the damage or issues'
+                          : 'This message will be sent to the returning teacher'
+                        }
                       </small>
                     </div>
 
@@ -561,7 +626,7 @@ const ReturnReview = () => {
                           }}
                         >
                           <i className="bi bi-check-circle"></i>
-                          Approve
+                          Approved
                         </button>
                         
                         <button
@@ -596,7 +661,7 @@ const ReturnReview = () => {
                           }}
                         >
                           <i className="bi bi-x-circle"></i>
-                          Reject
+                          Disapproved
                         </button>
                       </div>
                     )}
@@ -634,11 +699,14 @@ const ReturnReview = () => {
                     <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
                       Are you sure you want to{' '}
                       <strong style={{ color: '#1e293b' }}>
-                        {pendingAction === 'approve' ? 'approve this return' : 
-                         'reject this return'}?
+                        {pendingAction === 'approve' && isDamaged 
+                          ? 'mark this item as damaged' 
+                          : pendingAction === 'approve' 
+                          ? 'approve this return' 
+                          : 'disapprove this return'}?
                       </strong>
                     </p>
-                    {pendingAction === 'approve' && (
+                    {pendingAction === 'approve' && !isDamaged && (
                       <div style={{
                         backgroundColor: '#f0fdf4',
                         border: '1px solid #dcfce7',
@@ -650,6 +718,21 @@ const ReturnReview = () => {
                         <p style={{ margin: 0, color: '#166534', fontSize: '0.875rem' }}>
                           <i className="bi bi-check-circle me-2"></i>
                           <strong>Note:</strong> This confirms the item has NO damage. The item will be returned to admin inventory with "Available" status and becomes requestable by teachers again.
+                        </p>
+                      </div>
+                    )}
+                    {pendingAction === 'approve' && isDamaged && (
+                      <div style={{
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '8px',
+                        padding: '1rem',
+                        marginBottom: '1.5rem',
+                        textAlign: 'left'
+                      }}>
+                        <p style={{ margin: 0, color: '#991b1b', fontSize: '0.875rem' }}>
+                          <i className="bi bi-exclamation-triangle me-2"></i>
+                          <strong>Note:</strong> This marks the item as DAMAGED. The item will NOT be returned to admin inventory. It will remain in the teacher's assigned items with "Damaged" status. The Return button will be disabled and a note will be added: "Please proceed to the office for further details regarding this damaged item."
                         </p>
                       </div>
                     )}
