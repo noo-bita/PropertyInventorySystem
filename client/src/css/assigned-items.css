@@ -1,0 +1,127 @@
+﻿.assigned-item-overdue {
+  background-color: #fef2f2 !important;
+  position: relative;
+}
+
+.assigned-item-near-due {
+  background-color: #fffbeb !important;
+  position: relative;
+}
+
+/* Subtle pulse animation for overdue items - very low intensity */
+@keyframes subtle-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.98;
+  }
+}
+
+.assigned-item-overdue {
+  animation: subtle-pulse 4s ease-in-out infinite;
+}
+
+/* Hover states for status rows */
+.assigned-item-overdue:hover {
+  background-color: #fee2e2 !important;
+}
+
+.assigned-item-near-due:hover {
+  background-color: #fef3c7 !important;
+}
+
+/* Dark mode support for assigned items status */
+.dark-theme .assigned-item-overdue {
+  background-color: #7f1d1d !important;
+}
+
+.dark-theme .assigned-item-near-due {
+  background-color: #78350f !important;
+}
+
+.dark-theme .assigned-item-overdue:hover {
+  background-color: #991b1b !important;
+}
+
+.dark-theme .assigned-item-near-due:hover {
+  background-color: #92400e !important;
+}
+
+/* Ensure text remains readable in status rows */
+.assigned-item-overdue td {
+  color: #1f2937 !important;
+}
+
+.assigned-item-near-due td {
+  color: #1f2937 !important;
+}
+
+.dark-theme .assigned-item-overdue td {
+  color: #fecaca !important;
+}
+
+.dark-theme .assigned-item-near-due td {
+  color: #fde68a !important;
+}
+
+/* Ensure small text in due date cells is readable */
+.assigned-item-overdue td small.text-muted {
+  color: #991b1b !important;
+}
+
+.assigned-item-near-due td small.text-muted {
+  color: #92400e !important;
+}
+
+.dark-theme .assigned-item-overdue td small.text-muted {
+  color: #fca5a5 !important;
+}
+
+.dark-theme .assigned-item-near-due td small.text-muted {
+  color: #fcd34d !important;
+}
+
+/* Status badge styling for assigned items */
+.assigned-item-overdue .badge.bg-danger {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+.assigned-item-near-due .badge.bg-warning {
+  background-color: #f59e0b !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .assigned-item-overdue .badge.bg-danger {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .assigned-item-near-due .badge.bg-warning {
+  background-color: #d97706 !important;
+  color: #ffffff !important;
+}
+
+/* Ensure left border is visible and properly styled */
+.assigned-item-overdue[style*="border-left"] {
+  border-left-width: 4px !important;
+  border-left-style: solid !important;
+  border-left-color: #ef4444 !important;
+}
+
+.assigned-item-near-due[style*="border-left"] {
+  border-left-width: 4px !important;
+  border-left-style: solid !important;
+  border-left-color: #f59e0b !important;
+}
+
+.dark-theme .assigned-item-overdue[style*="border-left"] {
+  border-left-color: #ef4444 !important;
+}
+
+.dark-theme .assigned-item-near-due[style*="border-left"] {
+  border-left-color: #f59e0b !important;
+}
+
+/* Activity Log Dark Mode Styling */

@@ -1,0 +1,303 @@
+﻿.qr-generator-main {
+  margin-bottom: 40px;
+}
+
+.qr-generator-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 40px;
+}
+
+.qr-form-section,
+.qr-display-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.qr-form-card,
+.qr-display-card {
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  height: 100%;
+}
+
+.qr-form-card h3,
+.qr-display-card h3 {
+  margin: 0 0 24px 0;
+  color: #495057;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.qr-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.qr-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qr-form .form-group label {
+  font-weight: 500;
+  color: #495057;
+  font-size: 14px;
+}
+
+.qr-form .form-control,
+.qr-form .form-select {
+  padding: 12px 16px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.qr-form .form-control:focus,
+.qr-form .form-select:focus {
+  border-color: #16a34a;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.generate-btn {
+  margin-top: 8px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.generate-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.generate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.qr-display-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+  min-height: 300px;
+  justify-content: center;
+}
+
+.qr-code-generated {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.qr-code-image {
+  display: flex;
+  justify-content: center;
+}
+
+.qr-item-info {
+  text-align: center;
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.qr-item-info p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #495057;
+}
+
+.qr-item-info p:last-child {
+  margin-bottom: 0;
+}
+
+.qr-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.qr-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.action-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* How to Use QR Codes Section */
+.qr-usage-section {
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.qr-usage-section h3 {
+  margin: 0 0 32px 0;
+  color: #495057;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.usage-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.usage-step-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  background: #f8f9fa;
+  transition: all 0.2s ease;
+}
+
+.usage-step-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #16a34a;
+}
+
+.step-icon {
+  width: 60px;
+  height: 60px;
+  background: #16a34a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.step-icon i {
+  font-size: 24px;
+  color: white;
+}
+
+.usage-step-card h4 {
+  margin: 0 0 12px 0;
+  color: #495057;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.usage-step-card p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Responsive adjustments for QR Generator */
+@media (max-width: 768px) {
+  .qr-generator-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  
+  .qr-form-card,
+  .qr-display-card {
+    padding: 24px;
+  }
+  
+  .usage-steps-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .qr-actions {
+    flex-direction: column;
+  }
+  
+  .action-btn {
+    width: 100%;
+  }
+}
+
+
+/* QR Generator Dark Mode */
+
+.dark-theme .qr-code-image img {
+  background-color: white !important;
+  border-color: #334155 !important;
+}
+
+.dark-theme .qr-item-info {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+}
+
+.dark-theme .qr-item-info strong {
+  color: #f1f5f9 !important;
+}
+
+.dark-theme .qr-placeholder {
+  color: #94a3b8 !important;
+}
+
+.dark-theme .qr-placeholder > div {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+.dark-theme .qr-placeholder i {
+  color: #64748b !important;
+}
+
+.dark-theme .qr-placeholder p {
+  color: #94a3b8 !important;
+}
+
+.dark-theme .usage-step-card {
+  background-color: #0f172a !important;
+  border: 1px solid #334155 !important;
+}
+
+.dark-theme .usage-step-card:hover {
+  background-color: #1e293b !important;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark-theme .usage-step-card h4 {
+  color: #f1f5f9 !important;
+}
+
+.dark-theme .usage-step-card p {
+  color: #cbd5e1 !important;
+}
+
+/* Reports Page Dark Mode Styles */

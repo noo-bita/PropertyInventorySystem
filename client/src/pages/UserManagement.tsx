@@ -7,6 +7,9 @@ import ConfirmationModal from '../components/ConfirmationModal'
 import { showNotification } from '../utils/notifications'
 import LoadingButton from '../components/LoadingButton'
 import { getApiBaseUrl } from '../utils/api'
+import '../css/global.css'
+import '../css/users.css'
+import '../css/modals.css'
 
 export default function UserManagement() {
   const { user: currentUser } = useAuth()

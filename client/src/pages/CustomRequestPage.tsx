@@ -5,6 +5,9 @@ import Sidebar from '../components/Sidebar'
 import TeacherTopBar from '../components/TeacherTopBar'
 import AdminTopBar from '../components/AdminTopBar'
 import CustomRequestForm from '../components/CustomRequestForm'
+import '../css/global.css'
+import '../css/send-request.css'
+import '../css/modals.css'
 
 const CustomRequestPage = () => {
   const { user: currentUser } = useAuth()

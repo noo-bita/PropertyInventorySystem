@@ -8,6 +8,9 @@ import ConfirmationModal from '../components/ConfirmationModal'
 import { AnimatedKPI } from '../components/AnimatedKPI'
 import { useDataReady } from '../hooks/useDataReady'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/reports.css'
+import '../css/modals.css'
 
 const ReportManagement = () => {
   const { user: currentUser } = useAuth()

@@ -7,6 +7,9 @@ import AdminTopBar from '../components/AdminTopBar'
 import { AnimatedKPI } from '../components/AnimatedKPI'
 import { useDataReady } from '../hooks/useDataReady'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/requests.css'
+import '../css/modals.css'
 
 const CustomRequestManagement = () => {
   const { user: currentUser } = useAuth()

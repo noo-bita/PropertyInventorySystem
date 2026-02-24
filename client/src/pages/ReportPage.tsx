@@ -7,6 +7,9 @@ import AdminTopBar from '../components/AdminTopBar'
 import ReportForm from '../components/ReportForm'
 import { AnimatedKPI } from '../components/AnimatedKPI'
 import { useDataReady } from '../hooks/useDataReady'
+import '../css/global.css'
+import '../css/send-request.css'
+import '../css/modals.css'
 
 const ReportPage = () => {
   const { user: currentUser } = useAuth()

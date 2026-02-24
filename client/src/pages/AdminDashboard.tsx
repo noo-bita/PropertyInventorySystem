@@ -6,6 +6,8 @@ import DashboardChart from '../components/DashboardChart'
 import BudgetWidget from '../components/BudgetWidget'
 import { useCountUp } from '../hooks/useCountUp'
 import { useDataReady } from '../hooks/useDataReady'
+import '../css/global.css'
+import '../css/dashboard.css'
 
 // KPI Card Component with Count-up Animation
 interface KPICardProps {
@@ -65,7 +67,7 @@ export default function AdminDashboard() {
   const [activityPage, setActivityPage] = useState(1)
   const itemsPerPage = 4
 
-  // Fetch dashboard data
+  // Fetch dashboard data - using optimized dashboard endpoint
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!currentUser) {
@@ -81,62 +83,117 @@ export default function AdminDashboard() {
           setLoading(false)
         }, 10000)
         
-        const [inventoryRes, requestsRes, usersRes, reportsRes] = await Promise.all([
-          apiFetch('/api/inventory'),
-          apiFetch('/api/requests'),
-          apiFetch('/api/users'),
-          apiFetch('/api/reports')
-        ])
+        // Use optimized dashboard endpoint - request full data for charts
+        const dashboardRes = await apiFetch('/api/dashboard/admin?include_full_data=true')
         
         clearTimeout(timeoutId)
 
-        const inventory = inventoryRes.ok ? await inventoryRes.json() : []
-        const requests = requestsRes.ok ? await requestsRes.json() : []
-        const users = usersRes.ok ? await usersRes.json() : []
-        const reports = reportsRes.ok ? await reportsRes.json() : []
+        if (dashboardRes.ok) {
+          const data = await dashboardRes.json()
+          
+          console.log('Dashboard data received:', data)
+          
+          // Ensure all required fields are present
+          const dashboardDataUpdate = {
+            totalItems: data.totalItems ?? 0,
+            pendingRequests: data.pendingRequests ?? 0,
+            pendingInspection: data.pendingInspection ?? 0,
+            totalUsers: data.totalUsers ?? 0,
+            availableItems: data.availableItems ?? 0,
+            recentActivity: Array.isArray(data.recentActivity) ? data.recentActivity : [],
+            requestsData: Array.isArray(data.requestsData) ? data.requestsData : [],
+            reportsData: Array.isArray(data.reportsData) ? data.reportsData : [],
+            inventoryData: Array.isArray(data.inventoryData) ? data.inventoryData : []
+          }
+          
+          console.log('Setting dashboard data:', dashboardDataUpdate)
+          setDashboardData(dashboardDataUpdate)
+          
+          setTimeout(() => {
+            setDataReady(true)
+          }, 100)
+        } else {
+          let errorData = {}
+          try {
+            errorData = await dashboardRes.json()
+          } catch (e) {
+            console.error('Failed to parse error response:', e)
+          }
+          console.error('Failed to fetch dashboard data:', {
+            status: dashboardRes.status,
+            statusText: dashboardRes.statusText,
+            error: errorData
+          })
+          
+          // Fallback: Try fetching data the old way if new endpoint fails
+          console.log('Attempting fallback to individual endpoints...')
+          try {
+            const [inventoryRes, requestsRes, usersRes, reportsRes] = await Promise.all([
+              apiFetch('/api/inventory'),
+              apiFetch('/api/requests'),
+              apiFetch('/api/users'),
+              apiFetch('/api/reports')
+            ])
+            
+            const inventory = inventoryRes.ok ? await inventoryRes.json() : []
+            const requests = requestsRes.ok ? await requestsRes.json() : []
+            const users = usersRes.ok ? await usersRes.json() : []
+            const reports = reportsRes.ok ? await reportsRes.json() : []
 
-        const totalItems = inventory.length
-        const availableItems = inventory.reduce((sum: number, item: any) => sum + (item.available || 0), 0)
-        const pendingRequests = requests.filter((req: any) => 
-          req.status === 'pending' || req.status === 'under_review'
-        ).length
-        const pendingInspection = requests.filter((req: any) => 
-          req.status === 'returned_pending_inspection' && req.inspection_status === 'pending'
-        ).length
-        const totalUsers = users.length
+            const totalItems = inventory.length
+            const availableItems = inventory.reduce((sum: number, item: any) => sum + (item.available || 0), 0)
+            const pendingRequests = requests.filter((req: any) => 
+              req.status === 'pending' || req.status === 'under_review'
+            ).length
+            const pendingInspection = requests.filter((req: any) => 
+              req.status === 'returned_pending_inspection' && req.inspection_status === 'pending'
+            ).length
+            const totalUsers = users.length
 
-        const recentActivity = [
-          ...requests.slice(0, 5).map((req: any) => ({
-            type: 'request',
-            icon: 'bi-file-earmark-text',
-            color: '#3182ce',
-            text: `New ${req.request_type || 'item'} request from ${req.teacher_name}`,
-            time: new Date(req.created_at).toLocaleString()
-          })),
-          ...reports.slice(0, 3).map((report: any) => ({
-            type: 'report',
-            icon: 'bi-exclamation-triangle',
-            color: '#e53e3e',
-            text: `New report: ${report.notes?.includes('MISSING') ? 'Missing' : report.notes?.includes('DAMAGED') ? 'Damaged' : 'Other'} item`,
-            time: new Date(report.created_at).toLocaleString()
-          }))
-        ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 10)
+            const recentActivity = [
+              ...requests.slice(0, 5).map((req: any) => ({
+                type: 'request',
+                icon: 'bi-file-earmark-text',
+                color: '#3182ce',
+                text: `New ${req.request_type || 'item'} request from ${req.teacher_name}`,
+                time: new Date(req.created_at).toLocaleString()
+              })),
+              ...reports.slice(0, 3).map((report: any) => ({
+                type: 'report',
+                icon: 'bi-exclamation-triangle',
+                color: '#e53e3e',
+                text: `New report: ${report.notes?.includes('MISSING') ? 'Missing' : report.notes?.includes('DAMAGED') ? 'Damaged' : 'Other'} item`,
+                time: new Date(report.created_at).toLocaleString()
+              }))
+            ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 10)
 
-        setDashboardData({
-          totalItems,
-          pendingRequests,
-          pendingInspection,
-          totalUsers,
-          availableItems,
-          recentActivity,
-          requestsData: requests,
-          reportsData: reports,
-          inventoryData: inventory
-        })
-        
-        setTimeout(() => {
-          setDataReady(true)
-        }, 100)
+            setDashboardData({
+              totalItems,
+              pendingRequests,
+              pendingInspection,
+              totalUsers,
+              availableItems,
+              recentActivity,
+              requestsData: requests,
+              reportsData: reports,
+              inventoryData: inventory
+            })
+            
+            setTimeout(() => {
+              setDataReady(true)
+            }, 100)
+          } catch (fallbackError) {
+            console.error('Fallback also failed:', fallbackError)
+            setDataReady(false)
+          }
+          
+          setLoading(false)
+          
+          // Show user-friendly error message
+          if (dashboardRes.status === 401 || dashboardRes.status === 403) {
+            console.error('Authentication failed - please log in again')
+          }
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error)
         setLoading(false)

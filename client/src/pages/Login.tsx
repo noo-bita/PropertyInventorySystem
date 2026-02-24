@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import LoadingButton from '../components/LoadingButton'
+import '../css/global.css'
+import '../css/login.css'
 
 export default function Login() {
   const { login } = useAuth()

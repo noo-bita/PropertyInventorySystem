@@ -10,6 +10,9 @@ import { useDataReady } from '../hooks/useDataReady'
 import { showNotification } from '../utils/notifications'
 import ReturnItemModal from '../components/ReturnItemModal'
 import ConfirmationModal from '../components/ConfirmationModal'
+import '../css/global.css'
+import '../css/assigned-items.css'
+import '../css/modals.css'
 
 // Constants
 const NEAR_OVERDUE_DAYS = 3 // Items due within 3 days are considered "near overdue"
@@ -90,38 +93,20 @@ const AssignedItems = () => {
       
       console.log('Loading assigned items...')
       
-      // Fetch both assigned items and inventory items in parallel
-      const [requestsResponse, inventoryResponse] = await Promise.all([
-        apiFetch('/api/requests'),
-        apiFetch('/api/inventory')
-      ])
+      // Only fetch requests - no need to fetch all inventory
+      // Inventory existence will be validated by backend when needed
+      const requestsResponse = await apiFetch('/api/requests')
       
       clearTimeout(timeoutId)
       
-      if (requestsResponse.ok && inventoryResponse.ok) {
+      if (requestsResponse.ok) {
         const requestsData = await requestsResponse.json()
-        const inventoryData = await inventoryResponse.json()
-        
-        // Create a Set of inventory item IDs for quick lookup
-        const inventoryItemIds = new Set(
-          inventoryData.map((item: any) => item.id)
-        )
         
         // Filter for assigned items only (exclude returned and returned_pending_inspection)
-        let assigned = requestsData.filter((r: any) => 
+        // No need to check inventory existence - backend handles invalid items
+        const assigned = requestsData.filter((r: any) => 
           r.status === 'assigned'
         )
-        
-        // Filter out assigned items whose inventory item no longer exists
-        // Keep items with null item_id (custom requests) as they don't reference inventory
-        assigned = assigned.filter((r: any) => {
-          // If item_id is null, it's a custom request - keep it
-          if (r.item_id === null || r.item_id === undefined) {
-            return true
-          }
-          // If item_id exists, check if it's in the inventory
-          return inventoryItemIds.has(r.item_id)
-        })
         
         // Also get rejected returns for teacher view
         const rejectedReturns = requestsData.filter((r: any) => {

@@ -5,6 +5,8 @@ import { apiFetch } from '../utils/api'
 import { AnimatedKPI } from '../components/AnimatedKPI'
 import BudgetWidget from '../components/BudgetWidget'
 import { useDataReady } from '../hooks/useDataReady'
+import '../css/global.css'
+import '../css/dashboard.css'
 
 interface TeacherDashboardData {
   assignedItemsCount: number
@@ -36,7 +38,7 @@ export default function TeacherDashboard() {
   const [activityPage, setActivityPage] = useState(1)
   const itemsPerPage = 4
 
-  // Fetch teacher-specific dashboard data
+  // Fetch teacher-specific dashboard data - using optimized dashboard endpoint
   useEffect(() => {
     const fetchTeacherDashboardData = async () => {
       if (!currentUser) {
@@ -53,90 +55,32 @@ export default function TeacherDashboard() {
           setLoading(false)
         }, 10000)
         
-        // Fetch only teacher-relevant data
-        const [requestsRes, assignedRes] = await Promise.all([
-          apiFetch('/api/requests'),
-          apiFetch(`/api/requests/teacher-assigned?teacher_name=${encodeURIComponent(currentUser.name)}`)
-        ])
+        // Use optimized dashboard endpoint instead of fetching all requests
+        const dashboardRes = await apiFetch(`/api/dashboard/teacher?teacher_name=${encodeURIComponent(currentUser.name)}`)
         
         clearTimeout(timeoutId)
 
-        const allRequests = requestsRes.ok ? await requestsRes.json() : []
-        const assignedItems = assignedRes.ok ? await assignedRes.json() : []
-
-        // Filter data for this specific teacher
-        const teacherName = currentUser.name
-        const myRequests = allRequests.filter((req: any) => req.teacher_name === teacherName)
-        const myAssignedItems = allRequests.filter((req: any) => 
-          req.teacher_name === teacherName && 
-          (req.status === 'assigned' || req.status === 'returned')
-        )
-
-        // Calculate teacher-specific metrics
-        const assignedItemsCount = myAssignedItems.filter((item: any) => item.status === 'assigned').length
-        const pendingRequestsCount = myRequests.filter((req: any) => 
-          req.status === 'pending' || req.status === 'under_review'
-        ).length
-        const approvedRequestsCount = myRequests.filter((req: any) => 
-          req.status === 'approved' || req.status === 'assigned'
-        ).length
-
-        // Calculate items due soon (within 3 days)
-        const now = new Date()
-        const threeDaysFromNow = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000))
-        const itemsDueSoon = myAssignedItems.filter((item: any) => {
-          if (!item.due_date || item.status !== 'assigned') return false
-          const dueDate = new Date(item.due_date)
-          return dueDate <= threeDaysFromNow && dueDate >= now
-        }).length
-
-        // Get recent activity (only teacher's own activity)
-        const recentActivity = myRequests
-          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-          .slice(0, 10)
-          .map((req: any) => {
-            let icon = 'bi-file-earmark-text'
-            let color = '#3182ce'
-            let text = ''
-            
-            if (req.status === 'approved' || req.status === 'assigned') {
-              icon = 'bi-check-circle'
-              color = '#10b981'
-              text = `Your request for ${req.item_name} was ${req.status === 'assigned' ? 'assigned' : 'approved'}`
-            } else if (req.status === 'pending' || req.status === 'under_review') {
-              icon = 'bi-clock'
-              color = '#f59e0b'
-              text = `Your request for ${req.item_name} is ${req.status === 'under_review' ? 'under review' : 'pending'}`
-            } else if (req.status === 'rejected') {
-              icon = 'bi-x-circle'
-              color = '#ef4444'
-              text = `Your request for ${req.item_name} was rejected`
-            } else {
-              text = `Request for ${req.item_name} - ${req.status}`
-            }
-            
-            return {
-              type: 'request',
-              icon,
-              color,
-              text,
-              time: new Date(req.created_at).toLocaleString()
-            }
+        if (dashboardRes.ok) {
+          const data = await dashboardRes.json()
+          
+          setDashboardData({
+            assignedItemsCount: data.assignedItemsCount || 0,
+            pendingRequestsCount: data.pendingRequestsCount || 0,
+            approvedRequestsCount: data.approvedRequestsCount || 0,
+            itemsDueSoon: data.itemsDueSoon || 0,
+            recentActivity: data.recentActivity || [],
+            myRequests: data.myRequests || [],
+            myAssignedItems: data.myAssignedItems || []
           })
-
-        setDashboardData({
-          assignedItemsCount,
-          pendingRequestsCount,
-          approvedRequestsCount,
-          itemsDueSoon,
-          recentActivity,
-          myRequests,
-          myAssignedItems
-        })
-        
-        setTimeout(() => {
-          setDataReady(true)
-        }, 100)
+          
+          setTimeout(() => {
+            setDataReady(true)
+          }, 100)
+        } else {
+          console.error('Failed to fetch teacher dashboard data')
+          setLoading(false)
+          setDataReady(false)
+        }
       } catch (error) {
         console.error('Error fetching teacher dashboard data:', error)
         setLoading(false)

@@ -6,6 +6,9 @@ import TeacherTopBar from '../components/TeacherTopBar'
 import AdminTopBar from '../components/AdminTopBar'
 import ConfirmationModal from '../components/ConfirmationModal'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/send-request.css'
+import '../css/modals.css'
 
 const SendRequest = () => {
   const { user: currentUser } = useAuth()

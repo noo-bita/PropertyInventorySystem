@@ -7,6 +7,9 @@ import AdminTopBar from '../components/AdminTopBar'
 import TeacherItemRequestModal from '../components/TeacherItemRequestModal'
 import TeacherQrScanner from '../components/TeacherQrScanner'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/send-request.css'
+import '../css/modals.css'
 
 interface InventoryItem {
   id: number | string

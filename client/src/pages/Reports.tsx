@@ -5,6 +5,8 @@ import Sidebar from '../components/Sidebar'
 import AdminTopBar from '../components/AdminTopBar'
 import { apiFetch, getApiBaseUrl } from '../utils/api'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/reports.css'
 
 export default function Reports() {
   const { user: currentUser } = useAuth()

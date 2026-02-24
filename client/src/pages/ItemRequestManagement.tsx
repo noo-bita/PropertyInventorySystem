@@ -8,6 +8,9 @@ import ConfirmationModal from '../components/ConfirmationModal'
 import { AnimatedKPI } from '../components/AnimatedKPI'
 import { useDataReady } from '../hooks/useDataReady'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/requests.css'
+import '../css/modals.css'
 
 const ItemRequestManagement = () => {
   const { user: currentUser } = useAuth()
@@ -90,28 +93,16 @@ const ItemRequestManagement = () => {
         setLoading(false)
       }, 10000)
       
-      // Fetch both requests and inventory items in parallel
-      const [requestsResponse, inventoryResponse] = await Promise.all([
-        apiFetch('/api/requests'),
-        apiFetch('/api/inventory')
-      ])
+      // Only fetch requests - filter pending on frontend
+      // No need to fetch all inventory upfront - consumable status checked on-demand when opening modal
+      const requestsResponse = await apiFetch('/api/requests')
       
       clearTimeout(timeoutId)
       
-      if (requestsResponse.ok && inventoryResponse.ok) {
+      if (requestsResponse.ok) {
         const requestsData = await requestsResponse.json()
-        const inventoryData = await inventoryResponse.json()
         
-        // Create a Map of inventory item ID to item data (including consumable status)
-        const inventoryItemMap = new Map(
-          inventoryData.map((item: any) => [item.id, item])
-        )
-        
-        // Create a Set of inventory item IDs for quick lookup
-        const inventoryItemIds = new Set(inventoryItemMap.keys())
-        
-        // Filter only pending item requests (exclude all responded/completed requests)
-        // Also filter out requests where the inventory item no longer exists
+        // Filter only pending item requests (exclude custom requests)
         const itemRequests = requestsData
           .filter((r: any) => {
             const isItemRequest = r.request_type === 'item' || !r.request_type
@@ -122,45 +113,9 @@ const ItemRequestManagement = () => {
               return false
             }
             
-            // If item_id exists, check if it's in the inventory
-            const itemExists = inventoryItemIds.has(r.item_id)
-            
-            return isItemRequest && isPending && itemExists
+            return isItemRequest && isPending
           })
-          .map((r: any) => {
-            // Attach consumable status to each request
-            const item = inventoryItemMap.get(r.item_id)
-            
-            // Debug: Log if item is not found in map
-            if (!item && r.item_id) {
-              console.warn('Item not found in inventory map for request:', {
-                request_id: r.id,
-                item_id: r.item_id,
-                item_name: r.item_name
-              })
-            }
-            
-            // Convert to boolean explicitly (handles 0/1, "true"/"false", null, undefined)
-            const consumable = item?.consumable
-            const consumableBool = consumable === true || consumable === 1 || consumable === '1' || consumable === 'true'
-            
-            // Debug logging for consumable items
-            if (consumableBool) {
-              console.log('✅ Attached consumable status to request:', {
-                request_id: r.id,
-                item_id: r.item_id,
-                item_name: r.item_name,
-                consumable_raw: consumable,
-                consumable_type: typeof consumable,
-                consumable_bool: consumableBool
-              })
-            }
-            
-            return {
-              ...r,
-              item_consumable: consumableBool
-            }
-          })
+        
         setRequests(itemRequests)
       }
     } catch (error) {
@@ -172,26 +127,13 @@ const ItemRequestManagement = () => {
 
   const refreshRequests = async () => {
     try {
-      // Fetch both requests and inventory items in parallel
-      const [requestsResponse, inventoryResponse] = await Promise.all([
-        apiFetch('/api/requests'),
-        apiFetch('/api/inventory')
-      ])
+      // Only fetch requests - filter pending on frontend
+      const requestsResponse = await apiFetch('/api/requests')
       
-      if (requestsResponse.ok && inventoryResponse.ok) {
+      if (requestsResponse.ok) {
         const requestsData = await requestsResponse.json()
-        const inventoryData = await inventoryResponse.json()
         
-        // Create a Map of inventory item ID to item data (including consumable status)
-        const inventoryItemMap = new Map(
-          inventoryData.map((item: any) => [item.id, item])
-        )
-        
-        // Create a Set of inventory item IDs for quick lookup
-        const inventoryItemIds = new Set(inventoryItemMap.keys())
-        
-        // Filter only pending item requests (exclude all responded/completed requests)
-        // Also filter out requests where the inventory item no longer exists
+        // Filter only pending item requests (exclude custom requests)
         const itemRequests = requestsData
           .filter((r: any) => {
             const isItemRequest = r.request_type === 'item' || !r.request_type
@@ -202,45 +144,9 @@ const ItemRequestManagement = () => {
               return false
             }
             
-            // If item_id exists, check if it's in the inventory
-            const itemExists = inventoryItemIds.has(r.item_id)
-            
-            return isItemRequest && isPending && itemExists
+            return isItemRequest && isPending
           })
-          .map((r: any) => {
-            // Attach consumable status to each request
-            const item = inventoryItemMap.get(r.item_id)
-            
-            // Debug: Log if item is not found in map
-            if (!item && r.item_id) {
-              console.warn('Item not found in inventory map for request:', {
-                request_id: r.id,
-                item_id: r.item_id,
-                item_name: r.item_name
-              })
-            }
-            
-            // Convert to boolean explicitly (handles 0/1, "true"/"false", null, undefined)
-            const consumable = item?.consumable
-            const consumableBool = consumable === true || consumable === 1 || consumable === '1' || consumable === 'true'
-            
-            // Debug logging for consumable items
-            if (consumableBool) {
-              console.log('✅ Attached consumable status to request:', {
-                request_id: r.id,
-                item_id: r.item_id,
-                item_name: r.item_name,
-                consumable_raw: consumable,
-                consumable_type: typeof consumable,
-                consumable_bool: consumableBool
-              })
-            }
-            
-            return {
-              ...r,
-              item_consumable: consumableBool
-            }
-          })
+        
         setRequests(itemRequests)
       }
     } catch (error) {

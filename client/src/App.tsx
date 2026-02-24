@@ -17,7 +17,7 @@ import ActivityLog from './pages/ActivityLog'
 import Suppliers from './pages/Suppliers'
 import ReturnReview from './pages/ReturnReview'
 import Notifications from './pages/Notifications'
-import './App.css'
+import './css/global.css'
 import { AuthProvider, useAuth } from './context/AuthContext'
 
 // Initialize theme from localStorage on app start

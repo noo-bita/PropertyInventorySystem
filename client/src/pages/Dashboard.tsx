@@ -6,6 +6,8 @@ import TeacherTopBar from '../components/TeacherTopBar'
 import AdminTopBar from '../components/AdminTopBar'
 import AdminDashboard from './AdminDashboard'
 import TeacherDashboard from './TeacherDashboard'
+import '../css/global.css'
+import '../css/dashboard.css'
 
 /**
  * Main Dashboard Router Component

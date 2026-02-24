@@ -6,6 +6,8 @@ import TeacherTopBar from '../components/TeacherTopBar'
 import AdminTopBar from '../components/AdminTopBar'
 import { apiFetch, getApiBaseUrl } from '../utils/api'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/settings.css'
 
 export default function Settings() {
   const { user: currentUser } = useAuth()

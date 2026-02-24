@@ -12,6 +12,9 @@ import { useDataReady } from '../hooks/useDataReady'
 import { apiFetch, getApiBaseUrl } from '../utils/api'
 import { useAuth } from '../context/AuthContext'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/inventory.css'
+import '../css/modals.css'
 
 export default function Inventory() {
   const { user } = useAuth()
@@ -189,8 +192,21 @@ export default function Inventory() {
 
   const categories = getCategories()
 
-  const toggleItemExpansion = (itemId: number | string) => {
+  const toggleItemExpansion = (itemId: number | string, item?: any) => {
     const newExpanded = new Set(expandedItems)
+    
+    // If this is a group item and we're opening it, close all other groups first
+    if (item?.isGrouped && !newExpanded.has(itemId)) {
+      // Remove all group items - find all expanded items that are groups
+      const allItems = filteredItems || []
+      const groupIds = Array.from(newExpanded).filter(id => {
+        const foundItem = allItems.find((p: any) => p.id === id)
+        return foundItem?.isGrouped
+      })
+      groupIds.forEach(id => newExpanded.delete(id))
+    }
+    
+    // Toggle the clicked item
     if (newExpanded.has(itemId)) {
       newExpanded.delete(itemId)
     } else {
@@ -928,8 +944,11 @@ export default function Inventory() {
                         {/* Main row - grouped for all categories, individual for others */}
                         <tr 
                           className={`${expandedItems.has(item.id) ? 'expanded-row' : ''} ${isLowStock ? 'low-stock-row' : ''} ${index % 2 === 0 ? 'even-row' : 'odd-row'} ${isGrouped ? 'grouped-electronics-row' : ''}`}
-                          onClick={() => toggleItemExpansion(item.id)}
-                          style={{ cursor: 'pointer' }}
+                          onClick={() => toggleItemExpansion(item.id, item)}
+                          style={{ 
+                            cursor: 'pointer',
+                            backgroundColor: isGrouped && expandedItems.has(item.id) ? '#dcfce7' : undefined
+                          }}
                         >
                           <td>
                             <i className={`bi ${expandedItems.has(item.id) ? 'bi-chevron-down' : 'bi-chevron-right'}`}></i>
@@ -1041,7 +1060,13 @@ export default function Inventory() {
                               // Expanded view for grouped items - show individual items
                               <>
                                 <tr className="expanded-details-header" style={{ backgroundColor: '#f8f9fa' }}>
-                                  <td colSpan={8} style={{ padding: '0.75rem 1rem', fontWeight: '600', color: '#495057' }}>
+                                  <td colSpan={8} style={{ 
+                                    padding: '1rem 1.5rem', 
+                                    fontWeight: '600', 
+                                    color: '#495057',
+                                    marginTop: '1rem',
+                                    borderTop: '2px solid #e5e7eb'
+                                  }}>
                                     <i className="bi bi-box-seam" style={{ marginRight: '0.5rem' }}></i>
                                     Individual Items ({item.groupedItems?.length || 0})
                                   </td>
@@ -1056,25 +1081,39 @@ export default function Inventory() {
                                         className="electronics-individual-item-summary"
                                         style={{ 
                                           backgroundColor: '#f0fdf4',
-                                          cursor: 'pointer'
+                                          cursor: 'pointer',
+                                          borderTop: idx === 0 ? '2px solid #e5e7eb' : 'none'
                                         }}
                                         onClick={(e) => {
                                           e.stopPropagation()
                                           toggleItemExpansion(`individual-${individualItem.id}`)
                                         }}
                                       >
-                                        <td style={{ paddingLeft: '3rem' }}>
+                                        <td style={{ 
+                                          paddingLeft: '3rem', 
+                                          paddingTop: idx === 0 ? '1rem' : '0.75rem', 
+                                          paddingBottom: '0.75rem'
+                                        }}>
                                           <i className={`bi ${isIndividualExpanded ? 'bi-chevron-down' : 'bi-chevron-right'}`}></i>
                                         </td>
-                                        <td>
+                                        <td style={{ 
+                                          paddingTop: idx === 0 ? '1rem' : '0.75rem', 
+                                          paddingBottom: '0.75rem' 
+                                        }}>
                                           <span className="item-id">#{String(individualItem.id).padStart(3, '0')}</span>
                                         </td>
-                                        <td>
+                                        <td style={{ 
+                                          paddingTop: idx === 0 ? '1rem' : '0.75rem', 
+                                          paddingBottom: '0.75rem' 
+                                        }}>
                                           <div className="item-info-cell">
                                             <span>{individualItem.name}</span>
                                           </div>
                                         </td>
-                                        <td>
+                                        <td style={{ 
+                                          paddingTop: idx === 0 ? '1rem' : '0.75rem', 
+                                          paddingBottom: '0.75rem' 
+                                        }}>
                                           <div>
                                             {individualItem.category}
                                             {individualItem.secondary_category && (
@@ -1089,19 +1128,30 @@ export default function Inventory() {
                                             )}
                                           </div>
                                         </td>
-                                        <td>{individualItem.quantity}</td>
-                                        <td>
-                                          <span className={individualLowStock ? 'low-stock-indicator' : ''}>
+                                        <td style={{ 
+                                          paddingTop: idx === 0 ? '1rem' : '0.75rem', 
+                                          paddingBottom: '0.75rem' 
+                                        }}>{individualItem.quantity}</td>
+                                        <td style={{ 
+                                          paddingTop: idx === 0 ? '1rem' : '0.75rem', 
+                                          paddingBottom: '0.75rem' 
+                                        }}>
+                                          <span>
                                             {individualItem.available}
                                           </span>
                                         </td>
-                                        <td>
-                                          <span className={`badge badge-modern ${getStatusBadgeColor(individualItem.status)} ${individualLowStock ? 'badge-low-stock' : ''}`}>
+                                        <td style={{ 
+                                          paddingTop: idx === 0 ? '1rem' : '0.75rem', 
+                                          paddingBottom: '0.75rem' 
+                                        }}>
+                                          <span className={`badge badge-modern ${getStatusBadgeColor(individualItem.status)}`}>
                                             {individualItem.status}
-                                            {individualLowStock && <i className="bi bi-exclamation-triangle-fill ms-1" style={{ fontSize: '10px' }}></i>}
                                           </span>
                                         </td>
-                                        <td>
+                                        <td style={{ 
+                                          paddingTop: idx === 0 ? '1rem' : '0.75rem', 
+                                          paddingBottom: '0.75rem' 
+                                        }}>
                                           <div className="action-buttons action-buttons-modern" onClick={(e) => e.stopPropagation()}>
                                             <button 
                                               className="action-btn-edit action-btn-modern"
@@ -1131,8 +1181,8 @@ export default function Inventory() {
                                       {/* Expanded details for individual item */}
                                       {isIndividualExpanded && (
                                         <tr className="expanded-details electronics-individual-item">
-                                          <td colSpan={8}>
-                                            <div className="item-details-grid" style={{ marginLeft: '3rem' }}>
+                                          <td colSpan={8} style={{ paddingTop: '1rem', paddingBottom: '1rem' }}>
+                                            <div className="item-details-grid" style={{ marginLeft: '3rem', marginTop: '0.5rem' }}>
                                               <div className="item-info-section">
                                                 <div className="info-row">
                                                   <div className="detail-item">
@@ -1542,8 +1592,13 @@ export default function Inventory() {
                         <React.Fragment key={item.id}>
                           <tr 
                             className={`${expandedItems.has(item.id) ? 'expanded-row' : ''} ${index % 2 === 0 ? 'even-row' : 'odd-row'} ${isGrouped ? 'grouped-electronics-row' : ''}`}
-                            onClick={() => toggleItemExpansion(item.id)}
-                            style={{ cursor: 'pointer', backgroundColor: index % 2 === 0 ? '#fef2f2' : '#fff' }}
+                            onClick={() => toggleItemExpansion(item.id, item)}
+                            style={{ 
+                              cursor: 'pointer', 
+                              backgroundColor: isGrouped && expandedItems.has(item.id) 
+                                ? '#fef2f2' 
+                                : (index % 2 === 0 ? '#fef2f2' : '#fff')
+                            }}
                           >
                             <td>
                               <i className={`bi ${expandedItems.has(item.id) ? 'bi-chevron-down' : 'bi-chevron-right'}`}></i>
@@ -1648,11 +1703,23 @@ export default function Inventory() {
                           {expandedItems.has(item.id) && (
                             isGrouped ? (
                               <>
-                                {item.groupedItems?.map((individualItem: any) => (
+                                <tr className="expanded-details-header" style={{ backgroundColor: '#f8f9fa' }}>
+                                  <td colSpan={8} style={{ 
+                                    padding: '1rem 1.5rem', 
+                                    fontWeight: '600', 
+                                    color: '#495057',
+                                    marginTop: '1rem',
+                                    borderTop: '2px solid #e5e7eb'
+                                  }}>
+                                    <i className="bi bi-box-seam" style={{ marginRight: '0.5rem' }}></i>
+                                    Individual Items ({item.groupedItems?.length || 0})
+                                  </td>
+                                </tr>
+                                {item.groupedItems?.map((individualItem: any, idx: number) => (
                                   <React.Fragment key={individualItem.id}>
-                                    <tr className="expanded-details">
-                                      <td colSpan={8}>
-                                        <div className="item-details-grid">
+                                    <tr className="expanded-details" style={{ backgroundColor: '#fef2f2' }}>
+                                      <td colSpan={8} style={{ paddingTop: '1rem', paddingBottom: '1rem', paddingLeft: '3rem' }}>
+                                        <div className="item-details-grid" style={{ marginTop: '0.5rem' }}>
                                           <div className="item-info-section">
                                             <div className="info-row">
                                               <div className="detail-item">

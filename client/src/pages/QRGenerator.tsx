@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 import AdminTopBar from '../components/AdminTopBar'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/qr-generator.css'
 
 export default function QRGenerator() {
   const { user: currentUser } = useAuth()

@@ -76,22 +76,33 @@ class DashboardController extends Controller
                 ->values()
                 ->toArray();
 
-            // Get full data for charts (only if needed - can be optimized further)
-            $requestsData = ItemRequest::orderByDesc('created_at')->get();
-            $reportsData = Report::orderByDesc('created_at')->get();
-            $inventoryData = InventoryItem::all();
+            // Only fetch full data if explicitly requested (for charts)
+            // This significantly reduces payload size for most dashboard loads
+            $includeFullData = $request->query('include_full_data');
+            $includeFullData = filter_var($includeFullData, FILTER_VALIDATE_BOOLEAN);
 
-            return response()->json([
+            $responseData = [
                 'totalItems' => $totalItems,
                 'pendingRequests' => $pendingRequests,
                 'pendingInspection' => $pendingInspection,
                 'totalUsers' => $totalUsers,
                 'availableItems' => $availableItems,
-                'recentActivity' => $recentActivity,
-                'requestsData' => $requestsData,
-                'reportsData' => $reportsData,
-                'inventoryData' => $inventoryData
-            ], 200);
+                'recentActivity' => $recentActivity
+            ];
+
+            // Only include full data arrays if explicitly requested
+            if ($includeFullData === true) {
+                $responseData['requestsData'] = ItemRequest::orderByDesc('created_at')->get();
+                $responseData['reportsData'] = Report::orderByDesc('created_at')->get();
+                $responseData['inventoryData'] = InventoryItem::all();
+            } else {
+                // Always include empty arrays to maintain structure
+                $responseData['requestsData'] = [];
+                $responseData['reportsData'] = [];
+                $responseData['inventoryData'] = [];
+            }
+
+            return response()->json($responseData, 200);
 
         } catch (\Exception $e) {
             Log::error('Dashboard admin error: ' . $e->getMessage());

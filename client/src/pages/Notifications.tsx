@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../utils/api'
 import Sidebar from '../components/Sidebar'
 import AdminTopBar from '../components/AdminTopBar'
+import '../css/global.css'
 
 interface Notification {
   id: string

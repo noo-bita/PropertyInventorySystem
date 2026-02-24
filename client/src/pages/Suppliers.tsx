@@ -6,6 +6,8 @@ import Sidebar from '../components/Sidebar'
 import AdminTopBar from '../components/AdminTopBar'
 import ConfirmationModal from '../components/ConfirmationModal'
 import { showNotification } from '../utils/notifications'
+import '../css/global.css'
+import '../css/modals.css'
 
 interface Supplier {
   id: number
