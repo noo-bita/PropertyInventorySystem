@@ -669,27 +669,35 @@ export default function ItemDetailsModal({
                 />
             </div>
 
-                         <div>
-               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Serial Number
-               </label>
-                                                               <input 
-                   type="text" 
-                value={isEditMode ? editForm.serialNumber : (existingItem.serial_number || existingItem.serialNumber || '')}
-                onChange={(e) => isEditMode && handleInputChange('serialNumber', e.target.value)}
-                   disabled={!isEditMode}
-                placeholder={isEditMode ? (existingItem.serial_number || existingItem.serialNumber ? `Original: ${existingItem.serial_number || existingItem.serialNumber}` : 'Auto-generated if not provided') : 'Not specified'}
-                   style={{
-                     width: '100%',
-                     padding: '0.5rem',
-                     border: '1px solid #ced4da',
-                     borderRadius: '4px',
-                     fontSize: '1rem',
-                     backgroundColor: isEditMode ? 'white' : '#f8f9fa'
-                   }}
-                   className={isEditMode ? 'edit-input' : ''}
-                 />
-             </div>
+            {(() => {
+              const isConsumable = existingItem.consumable === true || existingItem.consumable === 1 || existingItem.consumable === '1' || existingItem.consumable === 'true'
+              if (!isConsumable) {
+                return (
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                      Serial Number
+                    </label>
+                    <input 
+                      type="text" 
+                      value={isEditMode ? editForm.serialNumber : (existingItem.serial_number || existingItem.serialNumber || '')}
+                      onChange={(e) => isEditMode && handleInputChange('serialNumber', e.target.value)}
+                      disabled={!isEditMode}
+                      placeholder={isEditMode ? (existingItem.serial_number || existingItem.serialNumber ? `Original: ${existingItem.serial_number || existingItem.serialNumber}` : 'Auto-generated if not provided') : 'Not specified'}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        border: '1px solid #ced4da',
+                        borderRadius: '4px',
+                        fontSize: '1rem',
+                        backgroundColor: isEditMode ? 'white' : '#f8f9fa'
+                      }}
+                      className={isEditMode ? 'edit-input' : ''}
+                    />
+                  </div>
+                )
+              }
+              return null
+            })()}
 
              <div>
                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
@@ -711,8 +719,6 @@ export default function ItemDetailsModal({
                    className="edit-input"
                  >
                   <option value="Available">Available</option>
-                  <option value="Out of Stock">Out of Stock</option>
-                  <option value="Low Stock">Low Stock</option>
                   <option value="Under Maintenance">Under Maintenance</option>
                   <option value="Damaged">Damaged</option>
                 </select>
@@ -1074,11 +1080,17 @@ export default function ItemDetailsModal({
             {/* Item Photo & QR Code Section - Title above all three columns */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Item Photo & QR Code
+                Item Photo {(() => {
+                  const isConsumable = existingItem.consumable === true || existingItem.consumable === 1 || existingItem.consumable === '1' || existingItem.consumable === 'true'
+                  return !isConsumable && '& QR Code'
+                })()}
               </label>
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: '2fr 1fr 1fr', // 3 columns: description (wider), photo display, QR code
+                gridTemplateColumns: (() => {
+                  const isConsumable = existingItem.consumable === true || existingItem.consumable === 1 || existingItem.consumable === '1' || existingItem.consumable === 'true'
+                  return isConsumable ? '2fr 1fr' : '2fr 1fr 1fr' // 2 columns for consumable, 3 for reusable
+                })(),
                 gap: '1rem', 
                 alignItems: 'start' 
               }}>
@@ -1214,40 +1226,239 @@ export default function ItemDetailsModal({
                   )}
                 </div>
 
-                {/* QR Code Display - Right Side */}
-                <div style={{ 
-                  width: '100%', 
-                  height: '160px',
-                  border: '2px solid #16a34a',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#ffffff',
-                  padding: '0.5rem'
-                }}>
-                  {(() => {
-                    // Always generate QR code with item details
-                    const qrData = `ITEM-${existingItem.id}-${existingItem.name}-${existingItem.category}-${existingItem.location}`
+                {/* QR Code Display - Right Side - Hidden for consumable items */}
+                {(() => {
+                  const isConsumable = existingItem.consumable === true || existingItem.consumable === 1 || existingItem.consumable === '1' || existingItem.consumable === 'true'
+                  if (isConsumable) {
                     return (
-                      <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrData)}`}
-                        alt="QR Code"
-                        style={{ 
-                          width: '100%', 
-                          height: '100%', 
-                          objectFit: 'contain',
-                          borderRadius: '4px'
-                        }}
-                        onError={(e) => {
-                          console.error('QR image failed to load:', e)
-                        }}
-                        onLoad={() => {
-                        }}
-                      />
+                      <div style={{ 
+                        width: '100%', 
+                        height: '160px',
+                        border: '2px dashed #ced4da',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#f8f9fa',
+                        padding: '0.5rem',
+                        flexDirection: 'column',
+                        gap: '0.5rem'
+                      }}>
+                        <i className="bi bi-info-circle" style={{ fontSize: '2rem', color: '#6c757d' }}></i>
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#6c757d', textAlign: 'center' }}>
+                          QR Code not available for consumable items
+                        </p>
+                      </div>
                     )
-                  })()}
-                </div>
+                  }
+                  return (
+                    <div style={{ 
+                      width: '100%',
+                      border: '2px solid #16a34a',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      backgroundColor: '#ffffff',
+                      padding: '1rem',
+                      gap: '0.75rem'
+                    }}>
+                      {(() => {
+                        // Generate QR code with comprehensive item identification data
+                        const serialNum = existingItem.serialNumber || existingItem.serial_number
+                        const itemId = existingItem.id
+                        const itemName = existingItem.name || 'Unknown Item'
+                        const itemCategory = existingItem.category || 'General'
+                        const itemLocation = existingItem.location || 'Unknown'
+                        
+                        // Create structured QR data that includes all identifying information
+                        // Format: ITEM-ID|SERIAL|NAME|CATEGORY|LOCATION
+                        const qrData = serialNum 
+                          ? `ITEM-${itemId}|SN:${serialNum}|${itemName}|${itemCategory}|${itemLocation}`
+                          : `ITEM-${itemId}|${itemName}|${itemCategory}|${itemLocation}`
+                        
+                        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`
+                        
+                        // Download function
+                        const downloadQRCode = () => {
+                          try {
+                            // Create a canvas to add text below QR code
+                            const canvas = document.createElement('canvas')
+                            const ctx = canvas.getContext('2d')
+                            if (!ctx) return
+                            
+                            canvas.width = 300
+                            canvas.height = 380 // Extra space for text
+                            
+                            // Load QR code image
+                            const img = new Image()
+                            img.crossOrigin = 'anonymous'
+                            img.onload = () => {
+                              // Draw white background
+                              ctx.fillStyle = '#ffffff'
+                              ctx.fillRect(0, 0, canvas.width, canvas.height)
+                              
+                              // Draw QR code
+                              ctx.drawImage(img, 50, 20, 200, 200)
+                              
+                              // Draw item information below QR code
+                              ctx.fillStyle = '#000000'
+                              ctx.font = 'bold 14px Arial'
+                              ctx.textAlign = 'center'
+                              
+                              // Item Name
+                              ctx.fillText(itemName, 150, 250)
+                              
+                              // Serial Number (if available)
+                              if (serialNum) {
+                                ctx.font = '12px Arial'
+                                ctx.fillText(`SN: ${serialNum}`, 150, 275)
+                              }
+                              
+                              // Item ID
+                              ctx.font = '10px Arial'
+                              ctx.fillText(`ID: ${itemId}`, 150, 295)
+                              
+                              // Category and Location
+                              ctx.fillText(`${itemCategory} | ${itemLocation}`, 150, 315)
+                              
+                              // Convert to blob and download
+                              canvas.toBlob((blob) => {
+                                if (blob) {
+                                  const url = URL.createObjectURL(blob)
+                                  const link = document.createElement('a')
+                                  link.download = `QR-${itemName.replace(/[^a-z0-9]/gi, '_')}-${serialNum || itemId}.png`
+                                  link.href = url
+                                  link.click()
+                                  URL.revokeObjectURL(url)
+                                  showNotification('QR Code downloaded successfully!', 'success')
+                                }
+                              }, 'image/png')
+                            }
+                            img.onerror = () => {
+                              // Fallback: download QR code directly without text
+                              const link = document.createElement('a')
+                              link.download = `QR-${itemName.replace(/[^a-z0-9]/gi, '_')}-${serialNum || itemId}.png`
+                              link.href = qrImageUrl
+                              link.click()
+                              showNotification('QR Code downloaded successfully!', 'success')
+                            }
+                            img.src = qrImageUrl
+                          } catch (error) {
+                            console.error('Error downloading QR code:', error)
+                            showNotification('Error downloading QR code. Please try again.', 'error')
+                          }
+                        }
+                        
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%' }}>
+                            {/* QR Code Image */}
+                            <div style={{ 
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '0.75rem',
+                              backgroundColor: '#ffffff',
+                              borderRadius: '4px',
+                              minHeight: '160px'
+                            }}>
+                              <img 
+                                src={qrImageUrl}
+                                alt="QR Code"
+                                id={`qr-code-${itemId}`}
+                                style={{ 
+                                  width: '100%', 
+                                  maxWidth: '160px',
+                                  height: 'auto',
+                                  objectFit: 'contain',
+                                  borderRadius: '4px'
+                                }}
+                                onError={(e) => {
+                                  console.error('QR image failed to load:', e)
+                                }}
+                              />
+                            </div>
+                            
+                            {/* Item Info below QR Code for identification */}
+                            <div style={{
+                              padding: '0.75rem',
+                              backgroundColor: '#f8f9fa',
+                              borderRadius: '4px',
+                              textAlign: 'center',
+                              border: '1px solid #dee2e6',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.5rem'
+                            }}>
+                              <div style={{ 
+                                fontWeight: '600', 
+                                color: '#212529',
+                                fontSize: '0.8rem',
+                                lineHeight: '1.3',
+                                wordWrap: 'break-word',
+                                overflowWrap: 'break-word'
+                              }}>
+                                {itemName}
+                              </div>
+                              {serialNum && (
+                                <div style={{ 
+                                  fontFamily: 'monospace', 
+                                  color: '#16a34a', 
+                                  fontWeight: '600',
+                                  fontSize: '0.75rem',
+                                  letterSpacing: '0.5px'
+                                }}>
+                                  SN: {serialNum}
+                                </div>
+                              )}
+                              <div style={{ 
+                                color: '#6c757d', 
+                                fontSize: '0.7rem',
+                                lineHeight: '1.4'
+                              }}>
+                                <div>ID: {itemId}</div>
+                                <div>{itemCategory}</div>
+                              </div>
+                            </div>
+                            
+                            {/* Download Button */}
+                            <button
+                              type="button"
+                              onClick={downloadQRCode}
+                              style={{
+                                width: '100%',
+                                padding: '0.625rem',
+                                backgroundColor: '#16a34a',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.875rem',
+                                fontWeight: '600',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.5rem',
+                                transition: 'background-color 0.2s',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = '#15803d'
+                                e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = '#16a34a'
+                                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
+                              }}
+                            >
+                              <i className="bi bi-download"></i>
+                              Download QR Code
+                            </button>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
 

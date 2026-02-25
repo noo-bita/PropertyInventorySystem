@@ -423,8 +423,6 @@ export default function BulkEditModal({
                   className="edit-input"
                 >
                   <option value="Available">Available</option>
-                  <option value="Out of Stock">Out of Stock</option>
-                  <option value="Low Stock">Low Stock</option>
                   <option value="Under Maintenance">Under Maintenance</option>
                   <option value="Damaged">Damaged</option>
                 </select>

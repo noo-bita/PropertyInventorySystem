@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { apiFetch } from '../utils/api'
+import { apiFetch, getApiBaseUrl } from '../utils/api'
 import { showNotification } from '../utils/notifications'
 import AutocompleteInput from './AutocompleteInput'
 import AutocompleteTextarea from './AutocompleteTextarea'
@@ -10,13 +10,44 @@ interface TeacherItemRequestModalProps {
     id: number | string
     name: string
     available: number
+    quantity?: number
+    category?: string
+    secondary_category?: string
     location?: string
+    status?: string
+    description?: string
+    serial_number?: string
+    serialNumber?: string
+    purchase_date?: string
+    purchaseDate?: string
+    purchase_price?: number
+    purchasePrice?: number
+    purchase_type?: string
+    purchaseType?: string
+    supplier?: string
+    consumable?: boolean | number | string
+    photo?: string
     isGrouped?: boolean
     groupedItems?: Array<{
       id: number
       name: string
       available: number
       location?: string
+      category?: string
+      secondary_category?: string
+      status?: string
+      description?: string
+      serial_number?: string
+      serialNumber?: string
+      purchase_date?: string
+      purchaseDate?: string
+      purchase_price?: number
+      purchasePrice?: number
+      purchase_type?: string
+      purchaseType?: string
+      supplier?: string
+      consumable?: boolean | number | string
+      photo?: string
     }>
   }
   currentUser: {
@@ -177,8 +208,8 @@ const TeacherItemRequestModal: React.FC<TeacherItemRequestModalProps> = ({
 
   return (
     <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
-      <div className="modal-dialog modal-dialog-centered modal-lg">
-        <div className="modal-content">
+      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '900px', width: '95%' }}>
+        <div className="modal-content" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
           <div className="modal-header">
             <h5 className="modal-title">
               <i className="bi bi-box-seam me-2"></i>
@@ -193,17 +224,328 @@ const TeacherItemRequestModal: React.FC<TeacherItemRequestModalProps> = ({
           </div>
           <form onSubmit={handleSubmit}>
             <div className="modal-body">
-              {/* Auto-filled Read-only Fields */}
-              <div className="mb-3">
-                <label className="form-label fw-bold">Item Name</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={item.name}
-                  readOnly
-                  style={{ backgroundColor: '#f8f9fa', cursor: 'not-allowed' }}
-                />
+              {/* Item Details Section - Similar to Admin View */}
+              <div style={{ 
+                backgroundColor: '#f8f9fa', 
+                padding: '1rem', 
+                borderRadius: '8px', 
+                marginBottom: '1.5rem',
+                border: '1px solid #dee2e6'
+              }}>
+                <h6 style={{ marginBottom: '1rem', fontWeight: 'bold', color: '#495057' }}>
+                  <i className="bi bi-info-circle me-2"></i>
+                  Item Details
+                </h6>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                  {/* Item Name */}
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Item Name
+                    </label>
+                    <div style={{ 
+                      padding: '0.5rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px', 
+                      border: '1px solid #ced4da',
+                      fontSize: '0.95rem',
+                      color: '#212529'
+                    }}>
+                      {item.name || 'N/A'}
+                    </div>
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Category
+                    </label>
+                    <div style={{ 
+                      padding: '0.5rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px', 
+                      border: '1px solid #ced4da',
+                      fontSize: '0.95rem',
+                      color: '#212529'
+                    }}>
+                      {item.category || item.groupedItems?.[0]?.category || 'N/A'}
+                    </div>
+                  </div>
+
+                  {/* Secondary Category */}
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Secondary Category
+                    </label>
+                    <div style={{ 
+                      padding: '0.5rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px', 
+                      border: '1px solid #ced4da',
+                      fontSize: '0.95rem',
+                      color: '#212529'
+                    }}>
+                      {item.secondary_category || item.groupedItems?.[0]?.secondary_category || 'None'}
+                    </div>
+                  </div>
+
+                  {/* Location */}
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Location
+                    </label>
+                    <div style={{ 
+                      padding: '0.5rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px', 
+                      border: '1px solid #ced4da',
+                      fontSize: '0.95rem',
+                      color: '#212529'
+                    }}>
+                      {item.location || item.groupedItems?.[0]?.location || 'N/A'}
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Status
+                    </label>
+                    <div style={{ 
+                      padding: '0.5rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px', 
+                      border: '1px solid #ced4da',
+                      fontSize: '0.95rem',
+                      color: '#212529'
+                    }}>
+                      {item.status || item.groupedItems?.[0]?.status || 'Available'}
+                    </div>
+                  </div>
+
+                  {/* Quantity */}
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Total Quantity
+                    </label>
+                    <div style={{ 
+                      padding: '0.5rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px', 
+                      border: '1px solid #ced4da',
+                      fontSize: '0.95rem',
+                      color: '#212529'
+                    }}>
+                      {item.quantity || item.groupedItems?.[0]?.quantity || 'N/A'}
+                    </div>
+                  </div>
+
+                  {/* Serial Number (if not consumable) */}
+                  {(() => {
+                    const isConsumable = item.consumable === true || item.consumable === 1 || item.consumable === '1' || item.consumable === 'true'
+                    const serialNum = item.serial_number || item.serialNumber || item.groupedItems?.[0]?.serial_number || item.groupedItems?.[0]?.serialNumber
+                    if (!isConsumable && serialNum) {
+                      return (
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                            Serial Number
+                          </label>
+                          <div style={{ 
+                            padding: '0.5rem', 
+                            backgroundColor: 'white', 
+                            borderRadius: '4px', 
+                            border: '1px solid #ced4da',
+                            fontSize: '0.95rem',
+                            color: '#16a34a',
+                            fontFamily: 'monospace',
+                            fontWeight: '600'
+                          }}>
+                            {serialNum}
+                          </div>
+                        </div>
+                      )
+                    }
+                    return null
+                  })()}
+
+                  {/* Item Type */}
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Item Type
+                    </label>
+                    <div style={{ 
+                      padding: '0.5rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px', 
+                      border: '1px solid #ced4da',
+                      fontSize: '0.95rem',
+                      color: '#212529'
+                    }}>
+                      {(() => {
+                        const isConsumable = item.consumable === true || item.consumable === 1 || item.consumable === '1' || item.consumable === 'true'
+                        return isConsumable ? 'Consumable' : 'Reusable'
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Purchase Type / Source */}
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Source Type
+                    </label>
+                    <div style={{ 
+                      padding: '0.5rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px', 
+                      border: '1px solid #ced4da',
+                      fontSize: '0.95rem',
+                      color: '#212529'
+                    }}>
+                      {(() => {
+                        const purchaseType = item.purchase_type || item.purchaseType || item.groupedItems?.[0]?.purchase_type || item.groupedItems?.[0]?.purchaseType
+                        return purchaseType === 'donated' ? 'Donated' : 'School Purchased'
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Supplier/Donor */}
+                  {(item.supplier || item.groupedItems?.[0]?.supplier) && (
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                        {(() => {
+                          const purchaseType = item.purchase_type || item.purchaseType || item.groupedItems?.[0]?.purchase_type || item.groupedItems?.[0]?.purchaseType
+                          return purchaseType === 'donated' ? 'Donor' : 'Supplier'
+                        })()}
+                      </label>
+                      <div style={{ 
+                        padding: '0.5rem', 
+                        backgroundColor: 'white', 
+                        borderRadius: '4px', 
+                        border: '1px solid #ced4da',
+                        fontSize: '0.95rem',
+                        color: '#212529'
+                      }}>
+                        {item.supplier || item.groupedItems?.[0]?.supplier || 'N/A'}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Purchase Date */}
+                  {(item.purchase_date || item.purchaseDate || item.groupedItems?.[0]?.purchase_date || item.groupedItems?.[0]?.purchaseDate) && (
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                        Purchase Date
+                      </label>
+                      <div style={{ 
+                        padding: '0.5rem', 
+                        backgroundColor: 'white', 
+                        borderRadius: '4px', 
+                        border: '1px solid #ced4da',
+                        fontSize: '0.95rem',
+                        color: '#212529'
+                      }}>
+                        {(() => {
+                          const date = item.purchase_date || item.purchaseDate || item.groupedItems?.[0]?.purchase_date || item.groupedItems?.[0]?.purchaseDate
+                          return date ? new Date(date).toLocaleDateString() : 'Not specified'
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Purchase Price */}
+                  {(item.purchase_price || item.purchasePrice || item.groupedItems?.[0]?.purchase_price || item.groupedItems?.[0]?.purchasePrice) && (
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                        Purchase Price
+                      </label>
+                      <div style={{ 
+                        padding: '0.5rem', 
+                        backgroundColor: 'white', 
+                        borderRadius: '4px', 
+                        border: '1px solid #ced4da',
+                        fontSize: '0.95rem',
+                        color: '#212529'
+                      }}>
+                        ₱{(() => {
+                          const price = item.purchase_price || item.purchasePrice || item.groupedItems?.[0]?.purchase_price || item.groupedItems?.[0]?.purchasePrice
+                          return price ? parseFloat(price.toString()).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Description - Full Width */}
+                {(item.description || item.groupedItems?.[0]?.description) && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Description
+                    </label>
+                    <div style={{ 
+                      padding: '0.75rem', 
+                      backgroundColor: 'white', 
+                      borderRadius: '4px', 
+                      border: '1px solid #ced4da',
+                      fontSize: '0.95rem',
+                      color: '#212529',
+                      minHeight: '60px',
+                      maxHeight: '120px',
+                      overflowY: 'auto'
+                    }}>
+                      {item.description || item.groupedItems?.[0]?.description || 'No description available'}
+                    </div>
+                  </div>
+                )}
+
+                {/* Item Photo - Full Width */}
+                {(item.photo || item.groupedItems?.[0]?.photo) && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', fontWeight: '600', color: '#6c757d' }}>
+                      Item Photo
+                    </label>
+                    <div style={{ 
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      padding: '1rem',
+                      backgroundColor: 'white',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      minHeight: '200px'
+                    }}>
+                      <img
+                        src={(() => {
+                          const photo = item.photo || item.groupedItems?.[0]?.photo
+                          if (!photo) return ''
+                          if (photo.startsWith('http')) return photo
+                          return `${getApiBaseUrl()}/${photo}`
+                        })()}
+                        alt={item.name}
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: '200px',
+                          objectFit: 'contain',
+                          borderRadius: '4px'
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Request Form Section */}
+              <div style={{ 
+                borderTop: '2px solid #dee2e6', 
+                paddingTop: '1.5rem', 
+                marginTop: '1rem' 
+              }}>
+                <h6 style={{ marginBottom: '1rem', fontWeight: 'bold', color: '#495057' }}>
+                  <i className="bi bi-file-earmark-text me-2"></i>
+                  Request Information
+                </h6>
 
               {!isFromQR ? (
                 <div className="row">
@@ -320,6 +662,7 @@ const TeacherItemRequestModal: React.FC<TeacherItemRequestModalProps> = ({
                   <div className="invalid-feedback">{errors.roomLocation}</div>
                 )}
               </div>
+            </div>
             </div>
             <div className="modal-footer">
               <button

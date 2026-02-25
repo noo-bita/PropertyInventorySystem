@@ -20,10 +20,16 @@ interface InventoryItem {
   quantity: number
   status?: string
   description?: string
+  serial_number?: string | null
+  purchase_date?: string | null
+  purchase_price?: number | null
+  purchase_type?: string
+  supplier?: string | null
+  consumable?: boolean
+  photo?: string | null
   isGrouped?: boolean
   groupedItems?: InventoryItem[]
   secondary_category?: string
-  consumable?: boolean
 }
 
 const ItemRequestPage = () => {
@@ -52,7 +58,13 @@ const ItemRequestPage = () => {
     quantity: item.quantity || item.item_quantity || 0,
     status: item.status || item.item_status || 'Available',
     description: item.description || item.item_description,
-    consumable: item.consumable ?? false
+    consumable: item.consumable ?? false,
+    serial_number: item.serial_number || item.serialNumber || null,
+    purchase_date: item.purchase_date || item.purchaseDate || null,
+    purchase_price: item.purchase_price || item.purchasePrice || null,
+    purchase_type: item.purchase_type || item.purchaseType || 'purchased',
+    supplier: item.supplier || null,
+    photo: item.photo || null
   })
 
   // Group items by name (same logic as admin inventory)

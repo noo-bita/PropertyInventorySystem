@@ -52,11 +52,28 @@ export default function Settings() {
     dateFormat: 'MM/DD/YYYY'
   })
 
+  // Budget Settings State
+  const [budget, setBudget] = useState({
+    total_budget: 0,
+    total_spent: 0,
+    remaining_balance: 0,
+    percentage_used: 0
+  })
+  const [budgetLoading, setBudgetLoading] = useState(true)
+  const [showEditBudgetModal, setShowEditBudgetModal] = useState(false)
+  const [editBudgetAmount, setEditBudgetAmount] = useState('')
+  const [isEditingBudget, setIsEditingBudget] = useState(false)
+  const [isRecalculatingBudget, setIsRecalculatingBudget] = useState(false)
+  const [showResetBudgetModal, setShowResetBudgetModal] = useState(false)
+  const [resetBudgetAmount, setResetBudgetAmount] = useState('')
+  const [isResettingBudget, setIsResettingBudget] = useState(false)
+
   const tabs = [
     { id: 'profile', name: 'Profile Settings', icon: 'bi-person' },
     { id: 'security', name: 'Security', icon: 'bi-shield-lock' },
     { id: 'notifications', name: 'Notifications', icon: 'bi-bell' },
-    { id: 'appearance', name: 'Appearance', icon: 'bi-palette' }
+    { id: 'appearance', name: 'Appearance', icon: 'bi-palette' },
+    ...(currentUser?.role === 'ADMIN' ? [{ id: 'budget', name: 'Budget', icon: 'bi-wallet2' }] : [])
   ]
 
   // Load user data on mount
@@ -64,6 +81,9 @@ export default function Settings() {
     setLoading(true)
     loadUserData()
     loadSettingsFromStorage()
+    if (currentUser?.role === 'ADMIN') {
+      loadBudget()
+    }
     
     const timeoutId = setTimeout(() => {
       setLoading(false)
@@ -431,6 +451,172 @@ export default function Settings() {
     } catch (error) {
       console.error('Error saving appearance preferences:', error)
       showNotification('Failed to save appearance preferences', 'error')
+    }
+  }
+
+  // Budget Functions
+  const loadBudget = async () => {
+    try {
+      setBudgetLoading(true)
+      const response = await apiFetch('/api/budget')
+      if (response.ok) {
+        const data = await response.json()
+        setBudget(data)
+      } else {
+        setBudget({
+          total_budget: 0,
+          total_spent: 0,
+          remaining_balance: 0,
+          percentage_used: 0
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching budget:', error)
+      setBudget({
+        total_budget: 0,
+        total_spent: 0,
+        remaining_balance: 0,
+        percentage_used: 0
+      })
+    } finally {
+      setBudgetLoading(false)
+    }
+  }
+
+  const handleEditBudget = async () => {
+    if (!editBudgetAmount || parseFloat(editBudgetAmount) < 0) {
+      showNotification('Please enter a valid budget amount', 'error')
+      return
+    }
+
+    setIsEditingBudget(true)
+    try {
+      const response = await apiFetch('/api/budget', {
+        method: 'POST',
+        body: JSON.stringify({
+          total_budget: parseFloat(editBudgetAmount)
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        if (data.budget) {
+          setBudget({
+            total_budget: data.budget.total_budget,
+            total_spent: data.budget.total_spent,
+            remaining_balance: data.budget.remaining_balance,
+            percentage_used: data.budget.percentage_used || 0
+          })
+        }
+        setShowEditBudgetModal(false)
+        setEditBudgetAmount('')
+        showNotification(data.message || 'Budget updated successfully!', 'success')
+        await loadBudget()
+      } else {
+        let errorMessage = data.error || 'Failed to update budget'
+        if (data.message) {
+          errorMessage = data.message
+        } else if (data.errors) {
+          const firstError = Object.values(data.errors)[0]
+          errorMessage = Array.isArray(firstError) ? firstError[0] : firstError
+        }
+        showNotification(errorMessage, 'error')
+      }
+    } catch (error: any) {
+      console.error('Error updating budget:', error)
+      showNotification(error.message || 'Error updating budget. Please try again.', 'error')
+    } finally {
+      setIsEditingBudget(false)
+    }
+  }
+
+  const handleRecalculateBudget = async () => {
+    setIsRecalculatingBudget(true)
+    try {
+      const response = await apiFetch('/api/budget/recalculate', {
+        method: 'POST'
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        if (data.budget) {
+          setBudget({
+            total_budget: data.budget.total_budget,
+            total_spent: data.budget.total_spent,
+            remaining_balance: data.budget.remaining_balance,
+            percentage_used: data.budget.percentage_used || 0
+          })
+        }
+        showNotification(data.message || 'Budget recalculated successfully!', 'success')
+        await loadBudget()
+      } else {
+        let errorMessage = data.error || 'Failed to recalculate budget'
+        if (data.message) {
+          errorMessage = data.message
+        } else if (data.errors) {
+          const firstError = Object.values(data.errors)[0]
+          errorMessage = Array.isArray(firstError) ? firstError[0] : firstError
+        }
+        showNotification(errorMessage, 'error')
+      }
+    } catch (error: any) {
+      console.error('Error recalculating budget:', error)
+      showNotification(error.message || 'Error recalculating budget. Please try again.', 'error')
+    } finally {
+      setIsRecalculatingBudget(false)
+    }
+  }
+
+  const handleResetBudget = async () => {
+    if (resetBudgetAmount && parseFloat(resetBudgetAmount) < 0) {
+      showNotification('Please enter a valid budget amount', 'error')
+      return
+    }
+
+    setIsResettingBudget(true)
+    try {
+      const requestBody: any = {}
+      if (resetBudgetAmount && resetBudgetAmount.trim() !== '') {
+        requestBody.total_budget = parseFloat(resetBudgetAmount)
+      }
+
+      const response = await apiFetch('/api/budget/reset', {
+        method: 'POST',
+        body: JSON.stringify(requestBody)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        if (data.budget) {
+          setBudget({
+            total_budget: data.budget.total_budget,
+            total_spent: data.budget.total_spent,
+            remaining_balance: data.budget.remaining_balance,
+            percentage_used: data.budget.percentage_used || 0
+          })
+        }
+        setShowResetBudgetModal(false)
+        setResetBudgetAmount('')
+        showNotification(data.message || 'Budget reset successfully!', 'success')
+        await loadBudget()
+      } else {
+        let errorMessage = data.error || 'Failed to reset budget'
+        if (data.message) {
+          errorMessage = data.message
+        } else if (data.errors) {
+          const firstError = Object.values(data.errors)[0]
+          errorMessage = Array.isArray(firstError) ? firstError[0] : firstError
+        }
+        showNotification(errorMessage, 'error')
+      }
+    } catch (error: any) {
+      console.error('Error resetting budget:', error)
+      showNotification(error.message || 'Error resetting budget. Please try again.', 'error')
+    } finally {
+      setIsResettingBudget(false)
     }
   }
 
@@ -931,6 +1117,133 @@ export default function Settings() {
     </div>
   )
 
+  const renderBudgetSettings = () => (
+    <div className="settings-content">
+      <div className="standard-card" style={{ marginBottom: '24px' }}>
+        <div className="standard-card-header">
+          <h4 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-dark)' }}>
+            <i className="bi bi-wallet2" style={{ marginRight: '0.5rem', color: '#16a34a' }}></i>
+            Budget Management
+          </h4>
+        </div>
+        <div className="standard-card-body">
+          {budgetLoading ? (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <div className="loading-spinner"></div>
+              <p style={{ marginTop: '1rem', color: 'var(--gray-600)' }}>Loading budget data...</p>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px', marginBottom: '24px' }}>
+                <div style={{
+                  padding: '1.5rem',
+                  backgroundColor: 'var(--gray-50)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--gray-200)'
+                }}>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>Total Budget</div>
+                  <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#16a34a' }}>
+                    ₱{budget.total_budget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div style={{
+                  padding: '1.5rem',
+                  backgroundColor: 'var(--gray-50)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--gray-200)'
+                }}>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>Total Spent</div>
+                  <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#ef4444' }}>
+                    ₱{budget.total_spent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div style={{
+                  padding: '1.5rem',
+                  backgroundColor: 'var(--gray-50)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--gray-200)'
+                }}>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>Remaining Balance</div>
+                  <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#3b82f6' }}>
+                    ₱{budget.remaining_balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div style={{
+                  padding: '1.5rem',
+                  backgroundColor: 'var(--gray-50)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--gray-200)'
+                }}>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>Percentage Used</div>
+                  <div style={{ fontSize: '1.75rem', fontWeight: '700', color: budget.percentage_used > 80 ? '#ef4444' : budget.percentage_used > 60 ? '#f59e0b' : '#16a34a' }}>
+                    {budget.percentage_used.toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  className="btn-standard"
+                  onClick={handleRecalculateBudget}
+                  disabled={isRecalculatingBudget}
+                  style={{
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    opacity: isRecalculatingBudget ? 0.6 : 1,
+                    cursor: isRecalculatingBudget ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isRecalculatingBudget ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm" style={{ marginRight: '0.5rem' }}></span>
+                      Recalculating...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-arrow-clockwise"></i> Recalculate
+                    </>
+                  )}
+                </button>
+                <button
+                  className="btn-standard"
+                  onClick={() => {
+                    setEditBudgetAmount(budget.total_budget.toString())
+                    setShowEditBudgetModal(true)
+                  }}
+                  style={{
+                    backgroundColor: '#16a34a',
+                    color: 'white',
+                    border: 'none'
+                  }}
+                >
+                  <i className="bi bi-pencil"></i> Edit Budget
+                </button>
+                <button
+                  className="btn-standard"
+                  onClick={() => {
+                    setResetBudgetAmount('')
+                    setShowResetBudgetModal(true)
+                  }}
+                  disabled={isResettingBudget}
+                  style={{
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    opacity: isResettingBudget ? 0.6 : 1,
+                    cursor: isResettingBudget ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  <i className="bi bi-arrow-counterclockwise"></i> Reset Budget
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'profile':
@@ -941,6 +1254,8 @@ export default function Settings() {
         return renderNotificationSettings()
       case 'appearance':
         return renderAppearanceSettings()
+      case 'budget':
+        return renderBudgetSettings()
       default:
         return renderProfileSettings()
     }
@@ -1029,6 +1344,316 @@ export default function Settings() {
                     )}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Budget Modal */}
+        {showEditBudgetModal && (
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000
+            }}
+            onClick={() => setShowEditBudgetModal(false)}
+          >
+            <div 
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '2rem',
+                maxWidth: '450px',
+                width: '90%',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="bi bi-wallet2" style={{ color: '#16a34a' }}></i>
+                  Edit School Budget
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowEditBudgetModal(false)
+                    setEditBudgetAmount('')
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '1.5rem',
+                    color: '#6b7280',
+                    cursor: 'pointer',
+                    padding: '0.25rem',
+                    lineHeight: 1
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: '500', color: '#374151', fontSize: '0.875rem' }}>
+                  Total Budget Amount
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{
+                    position: 'absolute',
+                    left: '1rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#16a34a',
+                    fontWeight: '700',
+                    fontSize: '1.125rem',
+                    zIndex: 1
+                  }}>
+                    ₱
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editBudgetAmount}
+                    onChange={(e) => setEditBudgetAmount(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleEditBudget()
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.875rem 1rem 0.875rem 2.75rem',
+                      border: '2px solid #16a34a',
+                      borderRadius: '8px',
+                      fontSize: '1.125rem',
+                      fontWeight: '600',
+                      backgroundColor: '#f0fdf4',
+                      color: '#1e293b',
+                      transition: 'all 0.2s ease',
+                      outline: 'none',
+                      boxShadow: '0 0 0 3px rgba(22, 163, 74, 0.1)'
+                    }}
+                    placeholder="0.00"
+                    autoFocus
+                  />
+                </div>
+                <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                  Enter the total budget amount for the school
+                </p>
+              </div>
+              
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    setShowEditBudgetModal(false)
+                    setEditBudgetAmount('')
+                  }}
+                  disabled={isEditingBudget}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    background: 'white',
+                    color: '#374151',
+                    cursor: isEditingBudget ? 'not-allowed' : 'pointer',
+                    fontWeight: '500',
+                    transition: 'all 0.2s',
+                    opacity: isEditingBudget ? 0.6 : 1
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditBudget}
+                  disabled={isEditingBudget}
+                  style={{
+                    padding: '0.625rem 1.5rem',
+                    border: 'none',
+                    borderRadius: '8px',
+                    background: isEditingBudget ? '#9ca3af' : '#16a34a',
+                    color: 'white',
+                    cursor: isEditingBudget ? 'not-allowed' : 'pointer',
+                    fontWeight: '600',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  {isEditingBudget ? (
+                    <>
+                      <div className="loading-spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-check-circle"></i>
+                      Save Budget
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reset Budget Modal */}
+        {showResetBudgetModal && (
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000
+            }}
+            onClick={() => setShowResetBudgetModal(false)}
+          >
+            <div 
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '2rem',
+                maxWidth: '500px',
+                width: '90%',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ 
+                  margin: 0, 
+                  marginBottom: '0.5rem', 
+                  fontSize: '1.5rem', 
+                  fontWeight: '600',
+                  color: '#1e293b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <i className="bi bi-arrow-counterclockwise" style={{ color: '#ef4444' }}></i>
+                  Reset Budget
+                </h3>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
+                  This will clear the total spent amount. You can optionally set a new budget amount.
+                </p>
+              </div>
+              
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '0.5rem', 
+                  fontSize: '0.875rem', 
+                  fontWeight: '500',
+                  color: '#374151'
+                }}>
+                  New Budget Amount (Optional)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={resetBudgetAmount}
+                  onChange={(e) => setResetBudgetAmount(e.target.value)}
+                  disabled={isResettingBudget}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '2px solid #ef4444',
+                    borderRadius: '8px',
+                    fontSize: '1.125rem',
+                    fontWeight: '600',
+                    backgroundColor: '#fef2f2',
+                    color: '#1e293b',
+                    transition: 'all 0.2s ease',
+                    outline: 'none',
+                    boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.1)'
+                  }}
+                  placeholder="Leave empty to keep current budget"
+                  autoFocus
+                />
+                <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                  Leave empty to keep the current budget amount. Total spent will be reset to ₱0.00.
+                </p>
+              </div>
+
+              <div style={{ 
+                padding: '1rem', 
+                backgroundColor: '#fef2f2', 
+                borderRadius: '8px', 
+                marginBottom: '1.5rem',
+                border: '1px solid #fecaca'
+              }}>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#991b1b', fontWeight: '500' }}>
+                  <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                  Warning: This action will reset total spent to ₱0.00. This cannot be undone.
+                </p>
+              </div>
+              
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    setShowResetBudgetModal(false)
+                    setResetBudgetAmount('')
+                  }}
+                  disabled={isResettingBudget}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    background: 'white',
+                    color: '#374151',
+                    cursor: isResettingBudget ? 'not-allowed' : 'pointer',
+                    fontWeight: '500',
+                    transition: 'all 0.2s',
+                    opacity: isResettingBudget ? 0.6 : 1
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleResetBudget}
+                  disabled={isResettingBudget}
+                  style={{
+                    padding: '0.625rem 1.5rem',
+                    border: 'none',
+                    borderRadius: '8px',
+                    background: isResettingBudget ? '#9ca3af' : '#ef4444',
+                    color: 'white',
+                    cursor: isResettingBudget ? 'not-allowed' : 'pointer',
+                    fontWeight: '600',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  {isResettingBudget ? (
+                    <>
+                      <div className="loading-spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div>
+                      Resetting...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-check-circle"></i>
+                      Reset Budget
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

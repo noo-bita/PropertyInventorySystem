@@ -10,6 +10,7 @@ use App\Models\SchoolBudget;
 use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class InventoryController extends Controller
 {
@@ -19,6 +20,16 @@ class InventoryController extends Controller
     public function index(): JsonResponse
     {
         $items = InventoryItem::all();
+
+        // Remove serial_number from consumable items
+        $items = $items->map(function ($item) {
+            $isConsumable = $item->consumable === true || $item->consumable === 1 || $item->consumable === '1' || $item->consumable === 'true';
+            if ($isConsumable) {
+                $item->serial_number = null;
+            }
+            return $item;
+        });
+
         return response()->json($items);
     }
 
@@ -59,10 +70,10 @@ class InventoryController extends Controller
         // Auto-create supplier/donor if it doesn't exist
         $supplierName = $request->supplier;
         $purchaseType = $request->purchase_type ?? 'purchased';
-        
+
         if ($supplierName && !empty(trim($supplierName))) {
             $supplierName = trim($supplierName);
-            
+
             if ($purchaseType === 'donated') {
                 // Check if donor exists, if not create it
                 $donor = Donor::where('supplier_name', $supplierName)->first();
@@ -115,7 +126,7 @@ class InventoryController extends Controller
 
         $quantity = $request->quantity;
         $serialNumbers = $request->serial_numbers ?? [];
-        
+
         // If quantity > 1, create individual items with unique serial numbers
         if ($quantity > 1) {
             $createdItems = [];
@@ -166,9 +177,12 @@ class InventoryController extends Controller
             for ($i = 0; $i < $quantity; $i++) {
                 $itemData = $baseItemData;
                 $itemData['photo'] = $photoPath;
-                
-                // Assign serial number
-                if (isset($serialNumbers[$i]) && !empty(trim($serialNumbers[$i]))) {
+
+                // Assign serial number - skip for consumable items
+                if ($itemData['consumable'] === true || $itemData['consumable'] === 1 || $itemData['consumable'] === '1' || $itemData['consumable'] === 'true') {
+                    // Don't generate serial number for consumable items
+                    $itemData['serial_number'] = null;
+                } elseif (isset($serialNumbers[$i]) && !empty(trim($serialNumbers[$i]))) {
                     // Use provided serial number
                     $itemData['serial_number'] = trim($serialNumbers[$i]);
                 } else {
@@ -176,10 +190,12 @@ class InventoryController extends Controller
                     $timestamp = now()->format('YmdHis');
                     $itemData['serial_number'] = 'SN-' . $timestamp . '-' . str_pad($i + 1, 4, '0', STR_PAD_LEFT);
                 }
-                
+
                 $item = InventoryItem::create($itemData);
-                $createdItems[] = $item;
-                
+
+                // Check if item is consumable
+                $isConsumable = $itemData['consumable'] === true || $itemData['consumable'] === 1 || $itemData['consumable'] === '1' || $itemData['consumable'] === 'true';
+
                 // Deduct from budget if item is purchased (not donated)
                 $deductedAmount = 0;
                 if ($itemData['purchase_type'] === 'purchased' && $itemData['purchase_price'] > 0) {
@@ -188,16 +204,26 @@ class InventoryController extends Controller
                         $deductedAmount = (float) $itemData['purchase_price'];
                         $budget->deduct($deductedAmount);
                     } catch (\Exception $e) {
-                        \Log::warning('Failed to deduct budget for item: ' . $e->getMessage());
+                        Log::warning('Failed to deduct budget for item: ' . $e->getMessage());
                     }
                 }
-                
+
                 // Log activity for each item with budget deduction info
-                $description = "Item created: {$item->name} (Serial: {$item->serial_number})";
+                $description = "Item created: {$item->name}";
+                if (!$isConsumable && $item->serial_number) {
+                    $description .= " (Serial: {$item->serial_number})";
+                }
                 if ($deductedAmount > 0) {
                     $description .= " | Budget deducted: ₱" . number_format($deductedAmount, 2);
                 }
                 ActivityLogService::logInventory('created', $description, $item->id, $request);
+
+                // Remove serial_number from consumable items before returning
+                if ($isConsumable) {
+                    $item->serial_number = null;
+                }
+
+                $createdItems[] = $item;
             }
 
             return response()->json($createdItems, 201);
@@ -221,8 +247,12 @@ class InventoryController extends Controller
                 'last_updated' => now()->toDateString()
             ];
 
-            // Assign serial number (from array if provided, or legacy single value)
-            if (!empty($serialNumbers) && !empty(trim($serialNumbers[0]))) {
+            // Assign serial number - skip for consumable items
+            $isConsumable = $itemData['consumable'] === true || $itemData['consumable'] === 1 || $itemData['consumable'] === '1' || $itemData['consumable'] === 'true';
+            if ($isConsumable) {
+                // Don't generate serial number for consumable items
+                $itemData['serial_number'] = null;
+            } elseif (!empty($serialNumbers) && !empty(trim($serialNumbers[0]))) {
                 $itemData['serial_number'] = trim($serialNumbers[0]);
             } elseif ($request->has('serial_number') && $request->serial_number) {
                 $itemData['serial_number'] = $request->serial_number;
@@ -266,7 +296,7 @@ class InventoryController extends Controller
                     $deductedAmount = (float) $itemData['purchase_price'];
                     $budget->deduct($deductedAmount);
                 } catch (\Exception $e) {
-                    \Log::warning('Failed to deduct budget for item: ' . $e->getMessage());
+                    Log::warning('Failed to deduct budget for item: ' . $e->getMessage());
                 }
             }
 
@@ -277,6 +307,12 @@ class InventoryController extends Controller
             }
             ActivityLogService::logInventory('created', $description, $item->id, $request);
 
+            // Remove serial_number from consumable items before returning
+            $isConsumable = $item->consumable === true || $item->consumable === 1 || $item->consumable === '1' || $item->consumable === 'true';
+            if ($isConsumable) {
+                $item->serial_number = null;
+            }
+
             return response()->json($item, 201);
         }
     }
@@ -286,6 +322,12 @@ class InventoryController extends Controller
      */
     public function show(InventoryItem $inventoryItem): JsonResponse
     {
+        // Remove serial_number from consumable items
+        $isConsumable = $inventoryItem->consumable === true || $inventoryItem->consumable === 1 || $inventoryItem->consumable === '1' || $inventoryItem->consumable === 'true';
+        if ($isConsumable) {
+            $inventoryItem->serial_number = null;
+        }
+
         return response()->json($inventoryItem);
     }
 
@@ -318,7 +360,7 @@ class InventoryController extends Controller
                 'item' => $inventoryItem
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error marking item as repaired', [
+            Log::error('Error marking item as repaired', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'item_id' => $inventoryItem->id
@@ -346,7 +388,7 @@ class InventoryController extends Controller
             'purchase_type' => 'required|in:purchased,donated',
             'supplier' => 'nullable|string|max:255',
             'added_by' => 'required|string|max:255',
-            'status' => 'required|in:Available,Low Stock,Out of Stock',
+            'status' => 'required|in:Available,Under Maintenance,Damaged',
             'photo' => 'nullable|string',
             'consumable' => 'nullable|boolean'
         ]);
@@ -445,7 +487,7 @@ class InventoryController extends Controller
         if ($needsBudgetAdjustment) {
             try {
                 $budget = SchoolBudget::getCurrent();
-                
+
                 if ($budgetAdjustment > 0) {
                     // Refund to budget (positive adjustment)
                     $budget->refund($budgetAdjustment);
@@ -453,19 +495,42 @@ class InventoryController extends Controller
                     // Deduct from budget (negative adjustment)
                     $amountToDeduct = abs($budgetAdjustment);
                     $deducted = $budget->deduct($amountToDeduct);
-                    
+
                     if (!$deducted) {
                         // Insufficient budget - warn but don't block the update
-                        \Log::warning("Insufficient budget when updating item. Required: ₱{$amountToDeduct}, Available: ₱{$budget->remaining_balance}");
+                        Log::warning("Insufficient budget when updating item. Required: ₱{$amountToDeduct}, Available: ₱{$budget->remaining_balance}");
                     }
                 }
             } catch (\Exception $e) {
-                \Log::warning('Failed to adjust budget for updated item: ' . $e->getMessage());
+                Log::warning('Failed to adjust budget for updated item: ' . $e->getMessage());
                 // Don't block the update if budget adjustment fails
             }
         }
 
+        // If item is being updated to consumable, or is already consumable, remove serial number
+        $isConsumableInUpdate = isset($updateData['consumable']) && (
+            $updateData['consumable'] === true ||
+            $updateData['consumable'] === 1 ||
+            $updateData['consumable'] === '1' ||
+            $updateData['consumable'] === 'true'
+        );
+        $isConsumableExisting = $inventoryItem->consumable === true ||
+            $inventoryItem->consumable === 1 ||
+            $inventoryItem->consumable === '1' ||
+            $inventoryItem->consumable === 'true';
+
+        // If updating to consumable or already consumable, remove serial number
+        if ($isConsumableInUpdate || $isConsumableExisting) {
+            $updateData['serial_number'] = null;
+        }
+
         $inventoryItem->update($updateData);
+
+        // Remove serial_number from consumable items before returning
+        $isConsumable = $isConsumableInUpdate || $isConsumableExisting;
+        if ($isConsumable) {
+            $inventoryItem->serial_number = null;
+        }
 
         // Log activity with budget adjustment info if applicable
         $description = "Item updated: {$inventoryItem->name}";
@@ -484,12 +549,12 @@ class InventoryController extends Controller
             $responseData['budget_adjustment'] = [
                 'type' => $budgetAdjustment > 0 ? 'refund' : 'deduct',
                 'amount' => abs($budgetAdjustment),
-                'message' => $budgetAdjustment > 0 
+                'message' => $budgetAdjustment > 0
                     ? "Budget refunded: ₱" . number_format($budgetAdjustment, 2)
                     : "Budget deducted: ₱" . number_format(abs($budgetAdjustment), 2)
             ];
         }
-        
+
         return response()->json($responseData);
     }
 
@@ -500,7 +565,7 @@ class InventoryController extends Controller
     {
         $itemName = $inventoryItem->name;
         $itemId = $inventoryItem->id;
-        
+
         // Refund budget if item was purchased (not donated)
         $refundedAmount = 0;
         if ($inventoryItem->purchase_type === 'purchased' && $inventoryItem->purchase_price > 0) {
@@ -509,19 +574,19 @@ class InventoryController extends Controller
                 $refundedAmount = (float) $inventoryItem->purchase_price;
                 $budget->refund($refundedAmount);
             } catch (\Exception $e) {
-                \Log::warning('Failed to refund budget for deleted item: ' . $e->getMessage());
+                Log::warning('Failed to refund budget for deleted item: ' . $e->getMessage());
             }
         }
-        
+
         $inventoryItem->delete();
-        
+
         // Log activity with budget refund information
         $description = "Item deleted: {$itemName}";
         if ($refundedAmount > 0) {
             $description .= " (Budget refunded: ₱" . number_format($refundedAmount, 2) . ")";
         }
         ActivityLogService::logInventory('deleted', $description, $itemId, $request);
-        
+
         return response()->json(null, 204);
     }
 
@@ -558,7 +623,7 @@ class InventoryController extends Controller
                         $budget->refund($itemRefunded);
                         $totalRefunded += $itemRefunded;
                     } catch (\Exception $e) {
-                        \Log::warning("Failed to refund budget for item {$itemId}: " . $e->getMessage());
+                        Log::warning("Failed to refund budget for item {$itemId}: " . $e->getMessage());
                         // Continue with deletion even if refund fails
                     }
                 }
@@ -581,7 +646,7 @@ class InventoryController extends Controller
                 ActivityLogService::logInventory('deleted', $description, $itemId, $request);
             } catch (\Exception $e) {
                 $errors[] = "Failed to delete item ID {$itemId}: " . $e->getMessage();
-                \Log::error("Error deleting item {$itemId}: " . $e->getMessage());
+                Log::error("Error deleting item {$itemId}: " . $e->getMessage());
             }
         }
 
@@ -592,7 +657,7 @@ class InventoryController extends Controller
             if ($totalRefunded > 0) {
                 $summaryDescription .= " | Total budget refunded: ₱" . number_format($totalRefunded, 2);
             }
-            
+
             // Use the main log method for summary with metadata
             ActivityLogService::log(
                 'bulk_deleted',
@@ -646,7 +711,7 @@ class InventoryController extends Controller
             'purchase_price' => 'nullable|numeric|min:0',
             'purchase_type' => 'nullable|in:purchased,donated',
             'supplier' => 'nullable|string|max:255',
-            'status' => 'nullable|in:Available,Low Stock,Out of Stock,Under Maintenance,Damaged',
+            'status' => 'nullable|in:Available,Under Maintenance,Damaged',
             'consumable' => 'nullable|boolean'
         ]);
 
@@ -728,7 +793,7 @@ class InventoryController extends Controller
                 if ($needsBudgetAdjustment) {
                     try {
                         $budget = SchoolBudget::getCurrent();
-                        
+
                         if ($budgetAdjustment > 0) {
                             // Refund to budget (positive adjustment)
                             $budget->refund($budgetAdjustment);
@@ -741,11 +806,11 @@ class InventoryController extends Controller
                                 $totalBudgetDeducted += $amountToDeduct;
                             } else {
                                 // Insufficient budget - warn but don't block the update
-                                \Log::warning("Insufficient budget when bulk updating item {$itemId}. Required: ₱{$amountToDeduct}, Available: ₱{$budget->remaining_balance}");
+                                Log::warning("Insufficient budget when bulk updating item {$itemId}. Required: ₱{$amountToDeduct}, Available: ₱{$budget->remaining_balance}");
                             }
                         }
                     } catch (\Exception $e) {
-                        \Log::warning("Failed to adjust budget for bulk updated item {$itemId}: " . $e->getMessage());
+                        Log::warning("Failed to adjust budget for bulk updated item {$itemId}: " . $e->getMessage());
                         // Don't block the update if budget adjustment fails
                     }
                 }
@@ -765,7 +830,7 @@ class InventoryController extends Controller
                         $changes[] = "{$field}: '{$oldValue}' → '{$value}'";
                     }
                 }
-                
+
                 // Add budget adjustment info to log if applicable
                 $logDescription = "Bulk update: " . implode(', ', $changes);
                 if ($needsBudgetAdjustment && $budgetAdjustment != 0) {
@@ -775,7 +840,7 @@ class InventoryController extends Controller
                         $logDescription .= " | Budget deducted: ₱" . number_format(abs($budgetAdjustment), 2);
                     }
                 }
-                
+
                 if (!empty($changes)) {
                     ActivityLogService::logInventory(
                         'updated',
@@ -786,7 +851,7 @@ class InventoryController extends Controller
                 }
             } catch (\Exception $e) {
                 $errors[] = "Failed to update item ID {$itemId}: " . $e->getMessage();
-                \Log::error("Error updating item {$itemId}: " . $e->getMessage());
+                Log::error("Error updating item {$itemId}: " . $e->getMessage());
             }
         }
 
@@ -803,7 +868,7 @@ class InventoryController extends Controller
             if ($totalBudgetDeducted > 0) {
                 $summaryDescription .= " | Total budget deducted: ₱" . number_format($totalBudgetDeducted, 2);
             }
-            
+
             ActivityLogService::log(
                 'bulk_updated',
                 'inventory',
@@ -822,7 +887,7 @@ class InventoryController extends Controller
             'message' => "Successfully updated {$updatedCount} item(s)",
             'updated_count' => $updatedCount
         ];
-        
+
         // Add budget adjustment info if applicable
         if ($totalBudgetRefunded > 0 || $totalBudgetDeducted > 0) {
             $response['budget_adjustment'] = [];
@@ -857,7 +922,7 @@ class InventoryController extends Controller
 
         // First, try exact serial number match
         $item = InventoryItem::where('serial_number', $qr)->first();
-        
+
         if ($item) {
             return response()->json([
                 'exists' => true,
@@ -867,7 +932,7 @@ class InventoryController extends Controller
 
         // Try partial serial number match (contains)
         $item = InventoryItem::where('serial_number', 'LIKE', "%{$qr}%")->first();
-        
+
         if ($item) {
             return response()->json([
                 'exists' => true,
@@ -879,12 +944,12 @@ class InventoryController extends Controller
         $parts = explode('-', $qr);
         if (count($parts) >= 2 && $parts[0] === 'ITEM') {
             $secondPart = $parts[1];
-            
+
             // Try to match by item ID first (ITEM-{id}-... format)
             if (is_numeric($secondPart)) {
                 $itemId = (int)$secondPart;
                 $item = InventoryItem::find($itemId);
-                
+
                 if ($item) {
                     return response()->json([
                         'exists' => true,
@@ -892,7 +957,7 @@ class InventoryController extends Controller
                     ]);
                 }
             }
-            
+
             // Try timestamp pattern (ITEM-{timestamp} format)
             $timestamp = $secondPart;
             $serialPattern = "QR-{$timestamp}";
@@ -914,9 +979,9 @@ class InventoryController extends Controller
         $allItems = InventoryItem::whereNotNull('serial_number')
                                  ->where('serial_number', '!=', '')
                                  ->get();
-        
+
         foreach ($allItems as $inventoryItem) {
-            if (strpos($qr, $inventoryItem->serial_number) !== false || 
+            if (strpos($qr, $inventoryItem->serial_number) !== false ||
                 strpos($inventoryItem->serial_number, $qr) !== false) {
                 return response()->json([
                     'exists' => true,
@@ -929,5 +994,42 @@ class InventoryController extends Controller
             'exists' => false,
             'item' => null
         ]);
+    }
+
+    /**
+     * Cleanup: Remove serial numbers from existing consumable items
+     * This method can be called to clean up any consumable items that have serial numbers
+     */
+    public function cleanupConsumableSerialNumbers(): JsonResponse
+    {
+        try {
+            // Find all consumable items that have serial numbers
+            $consumableItems = InventoryItem::where(function($query) {
+                $query->where('consumable', true)
+                    ->orWhere('consumable', 1)
+                    ->orWhere('consumable', '1')
+                    ->orWhere('consumable', 'true');
+            })
+            ->whereNotNull('serial_number')
+            ->where('serial_number', '!=', '')
+            ->get();
+
+            $updatedCount = 0;
+            foreach ($consumableItems as $item) {
+                $item->serial_number = null;
+                $item->save();
+                $updatedCount++;
+            }
+
+            return response()->json([
+                'message' => "Cleanup completed. Removed serial numbers from {$updatedCount} consumable item(s).",
+                'updated_count' => $updatedCount
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error cleaning up consumable serial numbers: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Error during cleanup: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

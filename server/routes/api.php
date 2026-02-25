@@ -62,6 +62,7 @@ Route::middleware([CorsMiddleware::class])->group(function () {
         Route::post('/inventory/bulk-delete', [InventoryController::class, 'bulkDelete']);
         Route::post('/inventory/bulk-update', [InventoryController::class, 'bulkUpdate']);
         Route::post('/inventory/{inventoryItem}/mark-repaired', [InventoryController::class, 'markRepaired']);
+        Route::post('/inventory/cleanup-consumable-serial-numbers', [InventoryController::class, 'cleanupConsumableSerialNumbers']);
 
         // Requests protected routes
         Route::post('/requests', [ItemRequestsController::class, 'store']);

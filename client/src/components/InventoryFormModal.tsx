@@ -613,8 +613,8 @@ export default function InventoryFormModal({
                 />
               </div>
 
-              {/* Serial Numbers Input - Only show for Electronics category */}
-              {newItem.category === 'Electronics' && (
+              {/* Serial Numbers Input - Only show for Electronics category and non-consumable items */}
+              {newItem.category === 'Electronics' && !newItem.consumable && (
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                     Serial Numbers (Optional - One per line or comma-separated)
@@ -1019,13 +1019,13 @@ export default function InventoryFormModal({
               </div>
 
             <div style={{ gridColumn: '1 / -1' }}>
-              {/* Item Photo & QR Code Section - Title above all three columns */}
+              {/* Item Photo Section - Title above two columns */}
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                Item Photo & QR Code
+                Item Photo
               </label>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: '2fr 1fr 1fr', // 3 columns: description (wider), photo upload, QR code
+                gridTemplateColumns: '2fr 1fr', // 2 columns: description and photo
                 gap: '1rem',
                 alignItems: 'start'
               }}>
@@ -1143,40 +1143,6 @@ export default function InventoryFormModal({
                   )}
                 </div>
 
-                {/* QR Code Display - Right Side */}
-                <div style={{
-                  width: '100%',
-                  height: '160px',
-                  border: '2px solid #16a34a',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#ffffff',
-                  padding: '0.5rem'
-                }}>
-                  {(() => {
-                    // Generate QR code data - use serial number if available, otherwise use item details
-                    const qrData = newItem.serialNumber || `ITEM-${Date.now()}-${newItem.name || 'New Item'}-${newItem.category || 'General'}-${newItem.location || 'Unknown'}`
-                    return (
-                      <div style={{ width: '100%', height: '100%' }}>
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrData)}`}
-                          alt="QR Code"
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'contain',
-                            borderRadius: '4px'
-                          }}
-                          onError={(e) => {
-                            console.error('QR image failed to load:', e)
-                          }}
-                        />
-                      </div>
-                    )
-                  })()}
-                </div>
               </div>
 
                 {/* Keep serial number in state but hide the field */}
