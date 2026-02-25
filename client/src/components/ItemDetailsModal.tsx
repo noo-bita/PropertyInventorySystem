@@ -376,23 +376,43 @@ export default function ItemDetailsModal({
              color: #6c757d !important;
              opacity: 1 !important;
            }
-                       .edit-input:-ms-input-placeholder {
-              color: #6c757d !important;
-              opacity: 1 !important;
-            }
-            .edit-input {
-              color: #495057 !important;
-            }
-            .item-details-modal input, 
-            .item-details-modal select, 
-            .item-details-modal textarea {
-              color: #495057 !important;
-            }
-            .item-details-modal input:disabled, 
-            .item-details-modal select:disabled, 
-            .item-details-modal textarea:disabled {
-              color: #6c757d !important;
-            }
+           .edit-input:-ms-input-placeholder {
+             color: #6c757d !important;
+             opacity: 1 !important;
+           }
+           .edit-input {
+             color: #495057 !important;
+           }
+           .item-details-modal input, 
+           .item-details-modal select, 
+           .item-details-modal textarea {
+             color: #495057 !important;
+           }
+           .item-details-modal input:disabled, 
+           .item-details-modal select:disabled, 
+           .item-details-modal textarea:disabled {
+             color: #6c757d !important;
+           }
+           /* Fix select dropdown text display - ensure full text is visible */
+           .item-details-modal select {
+             appearance: none !important;
+             -webkit-appearance: none !important;
+             -moz-appearance: none !important;
+             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E") !important;
+             background-repeat: no-repeat !important;
+             background-position: right 0.75rem center !important;
+             background-size: 12px !important;
+             text-overflow: clip !important;
+             overflow: visible !important;
+             white-space: nowrap !important;
+             width: 100% !important;
+             box-sizing: border-box !important;
+           }
+           .item-details-modal select option {
+             white-space: normal !important;
+             word-wrap: break-word !important;
+             padding: 0.5rem !important;
+           }
          `}
        </style>
        <div 
@@ -699,45 +719,6 @@ export default function ItemDetailsModal({
               return null
             })()}
 
-             <div>
-               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                 Status
-               </label>
-               {isEditMode ? (
-               <select 
-                   value={editForm.status || existingItem.status || 'Available'}
-                   onChange={(e) => handleInputChange('status', e.target.value)}
-                 style={{
-                   width: '100%',
-                   padding: '0.5rem',
-                   border: '1px solid #ced4da',
-                   borderRadius: '4px',
-                   fontSize: '1rem',
-                     backgroundColor: 'white',
-                     color: '#495057'
-                   }}
-                   className="edit-input"
-                 >
-                  <option value="Available">Available</option>
-                  <option value="Under Maintenance">Under Maintenance</option>
-                  <option value="Damaged">Damaged</option>
-                </select>
-               ) : (
-                 <input 
-                   type="text" 
-                   value={existingItem.status || 'Available'}
-                   disabled={true}
-                   style={{
-                     width: '100%',
-                     padding: '0.5rem',
-                     border: '1px solid #ced4da',
-                     borderRadius: '4px',
-                     fontSize: '1rem',
-                     backgroundColor: '#f8f9fa'
-                   }}
-                 />
-               )}
-             </div>
 
              {/* Item Source Section - Full Width */}
              <div style={{ gridColumn: '1 / -1' }}>
@@ -1019,39 +1000,41 @@ export default function ItemDetailsModal({
                )}
              </div>
 
-             <div>
-               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                 Purchase Price
-               </label>
-                                                               <input 
-                  type="number" 
-                  step="0.01"
-                  min="0"
-                  value={isEditMode ? editForm.purchasePrice : (existingItem.purchasePrice || '')}
-                  onChange={(e) => isEditMode && handleInputChange('purchasePrice', e.target.value)}
-                  disabled={!isEditMode || (isEditMode && editForm.purchaseType === 'donated')}
-                  placeholder={isEditMode ? `Original: ${existingItem.purchaseType === 'donated' ? 'N/A (Donated)' : (existingItem.purchasePrice || '0')}` : ''}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #ced4da',
-                    borderRadius: '4px',
-                    fontSize: '1rem',
-                    backgroundColor: (!isEditMode || (isEditMode && editForm.purchaseType === 'donated')) ? '#f8f9fa' : 'white'
-                  }}
-                  className={isEditMode ? 'edit-input' : ''}
-                />
-             </div>
+             <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', width: '100%' }}>
+               <div>
+                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                   Purchase Price
+                 </label>
+                 <input 
+                   type="number" 
+                   step="0.01"
+                   min="0"
+                   value={isEditMode ? editForm.purchasePrice : (existingItem.purchasePrice || '')}
+                   onChange={(e) => isEditMode && handleInputChange('purchasePrice', e.target.value)}
+                   disabled={!isEditMode || (isEditMode && editForm.purchaseType === 'donated')}
+                   placeholder={isEditMode ? `Original: ${existingItem.purchaseType === 'donated' ? 'N/A (Donated)' : (existingItem.purchasePrice || '0')}` : ''}
+                   style={{
+                     width: '100%',
+                     padding: '0.5rem',
+                     border: '1px solid #ced4da',
+                     borderRadius: '4px',
+                     fontSize: '1rem',
+                     backgroundColor: (!isEditMode || (isEditMode && editForm.purchaseType === 'donated')) ? '#f8f9fa' : 'white',
+                     boxSizing: 'border-box'
+                   }}
+                   className={isEditMode ? 'edit-input' : ''}
+                 />
+               </div>
 
-             <div>
-               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                 Purchase Date
-               </label>
-                                                               <input 
+               <div>
+                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                   Purchase Date
+                 </label>
+                 <input 
                    type="date" 
                    value={isEditMode ? editForm.purchaseDate : (existingItem.purchaseDate || '')}
                    onChange={(e) => isEditMode && handleInputChange('purchaseDate', e.target.value)}
-                 disabled={!isEditMode || (isEditMode && editForm.purchaseType === 'donated')}
+                   disabled={!isEditMode || (isEditMode && editForm.purchaseType === 'donated')}
                    placeholder={isEditMode ? `Original: ${existingItem.purchaseDate || 'Not specified'}` : ''}
                    style={{
                      width: '100%',
@@ -1059,21 +1042,65 @@ export default function ItemDetailsModal({
                      border: '1px solid #ced4da',
                      borderRadius: '4px',
                      fontSize: '1rem',
-                   backgroundColor: (!isEditMode || (isEditMode && editForm.purchaseType === 'donated')) ? '#f8f9fa' : 'white'
+                     backgroundColor: (!isEditMode || (isEditMode && editForm.purchaseType === 'donated')) ? '#f8f9fa' : 'white',
+                     boxSizing: 'border-box'
                    }}
                    className={isEditMode ? 'edit-input' : ''}
                  />
-               {isEditMode && editForm.purchaseType === 'donated' && (
-                 <small style={{
-                   display: 'block',
-                   marginTop: '0.25rem',
-                   fontSize: '0.75rem',
-                   color: '#6c757d',
-                   fontStyle: 'italic'
-                 }}>
-                   Purchase date is not applicable for donated items
-                 </small>
-               )}
+                 {isEditMode && editForm.purchaseType === 'donated' && (
+                   <small style={{
+                     display: 'block',
+                     marginTop: '0.25rem',
+                     fontSize: '0.75rem',
+                     color: '#6c757d',
+                     fontStyle: 'italic'
+                   }}>
+                     Purchase date is not applicable for donated items
+                   </small>
+                 )}
+               </div>
+
+               <div style={{ minWidth: 0 }}>
+                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                   Status
+                 </label>
+                 {isEditMode ? (
+                   <select 
+                     value={editForm.status || existingItem.status || 'Under Maintenance'}
+                     onChange={(e) => handleInputChange('status', e.target.value)}
+                     style={{
+                       width: '100%',
+                       padding: '0.5rem 2rem 0.5rem 0.5rem',
+                       border: '1px solid #ced4da',
+                       borderRadius: '4px',
+                       fontSize: '1rem',
+                       backgroundColor: 'white',
+                       color: '#495057',
+                       boxSizing: 'border-box',
+                       minWidth: 0
+                     }}
+                     className="edit-input"
+                   >
+                     <option value="Under Maintenance">Under Maintenance</option>
+                     <option value="Damaged">Damaged</option>
+                   </select>
+                 ) : (
+                   <input 
+                     type="text" 
+                     value={existingItem.status || 'Available'}
+                     disabled={true}
+                     style={{
+                       width: '100%',
+                       padding: '0.5rem',
+                       border: '1px solid #ced4da',
+                       borderRadius: '4px',
+                       fontSize: '1rem',
+                       backgroundColor: '#f8f9fa',
+                       boxSizing: 'border-box'
+                     }}
+                   />
+                 )}
+               </div>
              </div>
 
 

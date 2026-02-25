@@ -228,6 +228,24 @@ export default function Inventory() {
     }
   }
 
+  // Helper function to create a grouping key based on item details
+  const createGroupKey = (item: any, includeStatus: boolean = false) => {
+    const parts = [
+      item.name?.toLowerCase().trim() || 'unnamed',
+      item.category?.toLowerCase().trim() || '',
+      item.location?.toLowerCase().trim() || '',
+      item.description?.toLowerCase().trim() || '',
+      String(item.purchase_price || 0),
+      item.purchase_type?.toLowerCase().trim() || '',
+      item.supplier?.toLowerCase().trim() || '',
+      item.secondary_category?.toLowerCase().trim() || ''
+    ]
+    if (includeStatus) {
+      parts.push(item.status?.toLowerCase().trim() || '')
+    }
+    return parts.join('|')
+  }
+
   // Group items by name for ALL categories (like Electronics method)
   const processInventoryItems = (items: any[]) => {
     // First, map all items to ensure consistent structure
@@ -242,21 +260,42 @@ export default function Inventory() {
       return mapped
     })
     
-    // Group ALL items by name (not just Electronics)
-    const itemGroups = new Map<string, any[]>()
-    mappedItems.forEach(item => {
-      const key = item.name?.toLowerCase().trim() || 'unnamed'
-      if (!itemGroups.has(key)) {
-        itemGroups.set(key, [])
-      }
-      itemGroups.get(key)!.push(item)
+    // Separate items by status
+    const regularItems = mappedItems.filter(item => {
+      const status = item.status || item.item_status || ''
+      return status !== 'Damaged' && status !== 'Under Maintenance'
     })
     
-    // Create grouped items - only group if conditions are met
-    const groupedItems: any[] = []
-    const individualItems: any[] = []
+    const damagedItems = mappedItems.filter(item => {
+      const status = item.status || item.item_status || ''
+      return status === 'Damaged' || status === 'Under Maintenance'
+    })
     
-    itemGroups.forEach((items, nameKey) => {
+    // Process regular items - group by name only
+    const regularGroups = new Map<string, any[]>()
+    regularItems.forEach(item => {
+      const key = item.name?.toLowerCase().trim() || 'unnamed'
+      if (!regularGroups.has(key)) {
+        regularGroups.set(key, [])
+      }
+      regularGroups.get(key)!.push(item)
+    })
+    
+    // Process damaged items - group by full item details (name, category, location, description, etc.)
+    const damagedGroups = new Map<string, any[]>()
+    damagedItems.forEach(item => {
+      const key = createGroupKey(item, false) // Don't include status in key since all are damaged
+      if (!damagedGroups.has(key)) {
+        damagedGroups.set(key, [])
+      }
+      damagedGroups.get(key)!.push(item)
+    })
+    
+    // Create grouped items for regular items
+    const regularGroupedItems: any[] = []
+    const regularIndividualItems: any[] = []
+    
+    regularGroups.forEach((items, nameKey) => {
       const totalItems = items.length
       const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
       
@@ -272,7 +311,7 @@ export default function Inventory() {
         // Create a grouped item
         const groupedItem = {
           ...firstItem,
-          id: `group-${nameKey}`, // Use a special ID for groups
+          id: `group-regular-${nameKey}`, // Use a special ID for groups
           quantity: totalQuantity,
           available: totalAvailable,
           isGrouped: true,
@@ -282,15 +321,59 @@ export default function Inventory() {
                   totalAvailable < 5 || (totalAvailable / totalQuantity) < 0.2 ? 'Low Stock' : 
                   'Available'
         }
-        groupedItems.push(groupedItem)
+        regularGroupedItems.push(groupedItem)
       } else {
         // Don't group - show as individual item (quantity = 1 and only one item exists)
-        individualItems.push(...items)
+        regularIndividualItems.push(...items)
       }
     })
     
-    // Combine grouped items and individual items
-    return [...groupedItems, ...individualItems]
+    // Create grouped items for damaged items - group by full details
+    const damagedGroupedItems: any[] = []
+    const damagedIndividualItems: any[] = []
+    
+    damagedGroups.forEach((items, detailKey) => {
+      const totalItems = items.length
+      const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
+      
+      // For damaged items: Only group if there are multiple items (totalItems > 1)
+      // Single items (qty=1) should not be grouped unless there are multiple items with same details
+      const shouldGroup = totalItems > 1
+      
+      if (shouldGroup) {
+        const firstItem = items[0]
+        const totalAvailable = items.reduce((sum, item) => sum + (item.available || 0), 0)
+        
+        // Determine status - if all are damaged, show damaged; if mixed, show the most common
+        const statuses = items.map(item => item.status || item.item_status || 'Damaged')
+        const damagedCount = statuses.filter(s => s === 'Damaged').length
+        const maintenanceCount = statuses.filter(s => s === 'Under Maintenance').length
+        const groupStatus = damagedCount >= maintenanceCount ? 'Damaged' : 'Under Maintenance'
+        
+        // Create a grouped item for damaged items
+        const groupedItem = {
+          ...firstItem,
+          id: `group-damaged-${detailKey}`, // Use a special ID for damaged groups
+          quantity: totalQuantity,
+          available: totalAvailable,
+          isGrouped: true,
+          groupedItems: items, // Store individual items for expanded view
+          status: groupStatus
+        }
+        damagedGroupedItems.push(groupedItem)
+      } else {
+        // Don't group - show as individual item (only one item with these details)
+        damagedIndividualItems.push(...items)
+      }
+    })
+    
+    // Combine all items: regular grouped, regular individual, damaged grouped, damaged individual
+    return [
+      ...regularGroupedItems, 
+      ...regularIndividualItems,
+      ...damagedGroupedItems,
+      ...damagedIndividualItems
+    ]
   }
 
   // Helper function to check if an item is damaged
@@ -472,13 +555,9 @@ export default function Inventory() {
 
       if (response.ok) {
         const updatedItemResponse = await response.json()
-        const mappedUpdatedItem = mapInventoryItem(updatedItemResponse)
         
-        // Update the item in the inventory list
-        setInventoryItems(prevItems => prevItems.map(item => 
-          item.id === editingItem.id ? mappedUpdatedItem : item
-        ))
-        setExistingItem(mappedUpdatedItem)
+        // Reload inventory to ensure proper grouping (especially for status changes)
+        await loadInventoryItems()
         
         // Close modal and show success message
         closeModal()
@@ -1034,13 +1113,14 @@ export default function Inventory() {
                                 </button>
                                 </div>
                               ) : (
-                                <>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
                                   <button 
                                     className="action-btn-edit action-btn-modern"
                                     onClick={() => handleEditItem(item)}
                                     title="Edit Item"
                                   >
                                     <i className="bi bi-pencil"></i>
+                                    <span>Edit</span>
                                   </button>
                                   <button 
                                     className="action-btn-delete action-btn-modern"
@@ -1048,8 +1128,9 @@ export default function Inventory() {
                                     title="Delete Item"
                                   >
                                     <i className="bi bi-trash"></i>
+                                    <span>Delete</span>
                                   </button>
-                                </>
+                                </div>
                               )}
                             </div>
                           </td>
@@ -1163,6 +1244,7 @@ export default function Inventory() {
                                               title="Edit Item"
                                             >
                                               <i className="bi bi-pencil"></i>
+                                              <span>Edit</span>
                                             </button>
                                             <button 
                                               className="action-btn-delete action-btn-modern"
@@ -1174,6 +1256,7 @@ export default function Inventory() {
                                               title="Delete Item"
                                             >
                                               <i className="bi bi-trash"></i>
+                                              <span>Delete</span>
                                             </button>
                                           </div>
                                         </td>
@@ -1987,13 +2070,14 @@ export default function Inventory() {
                                     </button>
                                   </div>
                                 ) : (
-                                  <>
+                                  <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     <button 
                                       className="action-btn-edit action-btn-modern"
                                       onClick={() => handleEditItem(item)}
                                       title="Edit Item"
                                     >
                                       <i className="bi bi-pencil"></i>
+                                      <span>Edit</span>
                                     </button>
                                     <button 
                                       className="action-btn-delete action-btn-modern"
@@ -2001,8 +2085,9 @@ export default function Inventory() {
                                       title="Delete Item"
                                     >
                                       <i className="bi bi-trash"></i>
+                                      <span>Delete</span>
                                     </button>
-                                  </>
+                                  </div>
                                 )}
                               </div>
                             </td>
