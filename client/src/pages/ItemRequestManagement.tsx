@@ -669,11 +669,6 @@ const ItemRequestManagement = () => {
         <div 
           className="modal show d-block" 
           style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}
-          onClick={() => {
-            if (!showConfirmation) {
-              closeResponseModal()
-            }
-          }}
         >
           <div 
             className="modal-dialog modal-dialog-centered modal-lg"

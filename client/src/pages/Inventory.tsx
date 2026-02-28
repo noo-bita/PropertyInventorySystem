@@ -2143,6 +2143,43 @@ export default function Inventory() {
                                             </div>
                                           </div>
                                         </div>
+                                        <div style={{ 
+                                          marginTop: '1rem', 
+                                          paddingTop: '1rem', 
+                                          borderTop: '1px solid #e5e7eb',
+                                          display: 'flex',
+                                          justifyContent: 'flex-end',
+                                          gap: '0.5rem'
+                                        }}>
+                                          <div className="action-buttons action-buttons-modern" onClick={(e) => e.stopPropagation()}>
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                              <button 
+                                                className="action-btn-edit action-btn-modern"
+                                                onClick={(e) => {
+                                                  e.preventDefault()
+                                                  e.stopPropagation()
+                                                  handleEditItem(individualItem)
+                                                }}
+                                                title="Edit Item"
+                                              >
+                                                <i className="bi bi-pencil"></i>
+                                                <span>Edit</span>
+                                              </button>
+                                              <button 
+                                                className="action-btn-delete action-btn-modern"
+                                                onClick={(e) => {
+                                                  e.preventDefault()
+                                                  e.stopPropagation()
+                                                  handleDeleteItem(individualItem.id, individualItem.name)
+                                                }}
+                                                title="Delete Item"
+                                              >
+                                                <i className="bi bi-trash"></i>
+                                                <span>Delete</span>
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
                                       </td>
                                     </tr>
                                   </React.Fragment>
@@ -2180,6 +2217,43 @@ export default function Inventory() {
                                           <label>DESCRIPTION:</label>
                                           <span>{item.description || 'No description'}</span>
                                         </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div style={{ 
+                                    marginTop: '1rem', 
+                                    paddingTop: '1rem', 
+                                    borderTop: '1px solid #e5e7eb',
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                    gap: '0.5rem'
+                                  }}>
+                                    <div className="action-buttons action-buttons-modern" onClick={(e) => e.stopPropagation()}>
+                                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <button 
+                                          className="action-btn-edit action-btn-modern"
+                                          onClick={(e) => {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            handleEditItem(item)
+                                          }}
+                                          title="Edit Item"
+                                        >
+                                          <i className="bi bi-pencil"></i>
+                                          <span>Edit</span>
+                                        </button>
+                                        <button 
+                                          className="action-btn-delete action-btn-modern"
+                                          onClick={(e) => {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            handleDeleteItem(item.id, item.name)
+                                          }}
+                                          title="Delete Item"
+                                        >
+                                          <i className="bi bi-trash"></i>
+                                          <span>Delete</span>
+                                        </button>
                                       </div>
                                     </div>
                                   </div>

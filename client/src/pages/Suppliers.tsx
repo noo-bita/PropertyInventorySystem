@@ -658,12 +658,6 @@ export default function Suppliers() {
         <div
           className="modal show d-block"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-          onClick={() => {
-            if (!isSubmitting) {
-              setShowAddSupplierModal(false)
-              resetForm()
-            }
-          }}
         >
           <div
             className="modal-dialog modal-dialog-centered modal-lg"
@@ -960,13 +954,6 @@ export default function Suppliers() {
         <div
           className="modal show d-block"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-          onClick={() => {
-            if (!isSubmitting) {
-              setShowEditModal(false)
-              resetForm()
-              setEditingSupplier(null)
-            }
-          }}
         >
           <div
             className="modal-dialog modal-dialog-centered modal-lg"

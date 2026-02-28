@@ -73,7 +73,6 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     <div 
       className="modal show d-block" 
       style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10000 }}
-      onClick={onClose}
     >
       <div 
         className="modal-dialog modal-dialog-centered modal-lg"

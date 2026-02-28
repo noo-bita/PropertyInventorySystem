@@ -1255,7 +1255,12 @@ export default function Settings() {
       case 'appearance':
         return renderAppearanceSettings()
       case 'budget':
-        return renderBudgetSettings()
+        // Only allow ADMIN to access budget settings
+        if (currentUser?.role === 'ADMIN') {
+          return renderBudgetSettings()
+        } else {
+          return renderProfileSettings()
+        }
       default:
         return renderProfileSettings()
     }
@@ -1364,7 +1369,6 @@ export default function Settings() {
               justifyContent: 'center',
               zIndex: 10000
             }}
-            onClick={() => setShowEditBudgetModal(false)}
           >
             <div 
               style={{
@@ -1521,7 +1525,6 @@ export default function Settings() {
               justifyContent: 'center',
               zIndex: 10000
             }}
-            onClick={() => setShowResetBudgetModal(false)}
           >
             <div 
               style={{

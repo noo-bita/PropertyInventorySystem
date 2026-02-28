@@ -221,7 +221,6 @@ export default function BulkEditModal({
         justifyContent: 'center',
         zIndex: 10000
       }}
-      onClick={onClose}
     >
       <div
         className="item-details-modal"

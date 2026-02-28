@@ -416,20 +416,19 @@ export default function ItemDetailsModal({
          `}
        </style>
        <div 
-         style={{
-           position: 'fixed',
-           top: 0,
-           left: 0,
-           right: 0,
-           bottom: 0,
-           backgroundColor: 'rgba(0, 0, 0, 0.5)',
-           display: 'flex',
-           alignItems: 'center',
-           justifyContent: 'center',
-           zIndex: 9999
-         }}
-         onClick={onClose}
-       >
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}
+      >
              <div 
          className="item-details-modal"
          style={{
@@ -1066,7 +1065,7 @@ export default function ItemDetailsModal({
                  </label>
                  {isEditMode ? (
                    <select 
-                     value={editForm.status || existingItem.status || 'Under Maintenance'}
+                     value={editForm.status || existingItem.status || 'Available'}
                      onChange={(e) => handleInputChange('status', e.target.value)}
                      style={{
                        width: '100%',
@@ -1081,6 +1080,7 @@ export default function ItemDetailsModal({
                      }}
                      className="edit-input"
                    >
+                     <option value="Available">Available</option>
                      <option value="Under Maintenance">Under Maintenance</option>
                      <option value="Damaged">Damaged</option>
                    </select>
@@ -1104,7 +1104,7 @@ export default function ItemDetailsModal({
              </div>
 
 
-            {/* Item Photo & QR Code Section - Title above all three columns */}
+            {/* Item Photo & QR Code Section - Title above all columns */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                 Item Photo {(() => {
@@ -1116,25 +1116,31 @@ export default function ItemDetailsModal({
                 display: 'grid', 
                 gridTemplateColumns: (() => {
                   const isConsumable = existingItem.consumable === true || existingItem.consumable === 1 || existingItem.consumable === '1' || existingItem.consumable === 'true'
-                  return isConsumable ? '2fr 1fr' : '2fr 1fr 1fr' // 2 columns for consumable, 3 for reusable
+                  return isConsumable ? '1fr' : '1fr 1fr' // 1 column for consumable, 2 for reusable
                 })(),
                 gap: '1rem', 
                 alignItems: 'start' 
               }}>
-                {/* Description/Comment Area - Left Side (Wider) */}
+                {/* Left Column: Description and Photo Stacked */}
                 <div style={{ 
-                  border: '2px solid #ced4da',
-                  borderRadius: '8px',
-                  backgroundColor: '#ffffff',
-                  padding: '1rem',
-                  height: '160px',
                   display: 'flex',
-                  flexDirection: 'column'
+                  flexDirection: 'column',
+                  gap: '1rem'
                 }}>
-                  <label style={{ marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                    Description
-                  </label>
-                  {isEditMode ? (
+                  {/* Description/Comment Area */}
+                  <div style={{ 
+                    border: '2px solid #ced4da',
+                    borderRadius: '8px',
+                    backgroundColor: '#ffffff',
+                    padding: '1rem',
+                    height: '160px',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}>
+                    <label style={{ marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                      Description
+                    </label>
+                    {isEditMode ? (
                                                                                    <textarea
                         value={editForm.description || ''}
                         onChange={(e) => handleInputChange('description', e.target.value)}
@@ -1151,35 +1157,35 @@ export default function ItemDetailsModal({
                         placeholder={`Original: ${existingItem.description || 'No description available'}`}
                         className="edit-input"
                       />
-                  ) : (
-                    <div style={{
-                      flex: 1,
-                      border: '1px solid #ced4da',
-                      borderRadius: '4px',
-                      padding: '0.5rem',
-                      backgroundColor: '#f8f9fa',
-                      color: '#6c757d',
-                      fontSize: '0.9rem',
-                      overflow: 'auto'
-                    }}>
-                      {existingItem.description || 'No description available'}
-                    </div>
-                  )}
-                </div>
+                    ) : (
+                      <div style={{
+                        flex: 1,
+                        border: '1px solid #ced4da',
+                        borderRadius: '4px',
+                        padding: '0.5rem',
+                        backgroundColor: '#f8f9fa',
+                        color: '#6c757d',
+                        fontSize: '0.9rem',
+                        overflow: 'auto'
+                      }}>
+                        {existingItem.description || 'No description available'}
+                      </div>
+                    )}
+                  </div>
 
-                {/* Photo Display/Upload Area - Middle */}
-                <div style={{ 
-                  border: '2px solid #ced4da',
-                  borderRadius: '8px',
-                  backgroundColor: '#ffffff',
-                  padding: '1rem',
-                  textAlign: 'center',
-                  height: '160px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
+                  {/* Photo Display/Upload Area */}
+                  <div style={{ 
+                    border: '2px solid #ced4da',
+                    borderRadius: '8px',
+                    backgroundColor: '#ffffff',
+                    padding: '1rem',
+                    textAlign: 'center',
+                    height: '160px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
                   {isEditMode ? (
                     <div>
                       <input 
@@ -1251,43 +1257,27 @@ export default function ItemDetailsModal({
                       </div>
                     )
                   )}
+                  </div>
                 </div>
 
                 {/* QR Code Display - Right Side - Hidden for consumable items */}
                 {(() => {
                   const isConsumable = existingItem.consumable === true || existingItem.consumable === 1 || existingItem.consumable === '1' || existingItem.consumable === 'true'
                   if (isConsumable) {
-                    return (
-                      <div style={{ 
-                        width: '100%', 
-                        height: '160px',
-                        border: '2px dashed #ced4da',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: '#f8f9fa',
-                        padding: '0.5rem',
-                        flexDirection: 'column',
-                        gap: '0.5rem'
-                      }}>
-                        <i className="bi bi-info-circle" style={{ fontSize: '2rem', color: '#6c757d' }}></i>
-                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#6c757d', textAlign: 'center' }}>
-                          QR Code not available for consumable items
-                        </p>
-                      </div>
-                    )
+                    return null // Don't show QR code section for consumable items
                   }
                   return (
                     <div style={{ 
                       width: '100%',
+                      height: '336px', // Match stacked Description (160px) + gap (16px) + Photo (160px) = 336px
                       border: '2px solid #16a34a',
                       borderRadius: '8px',
                       display: 'flex',
                       flexDirection: 'column',
                       backgroundColor: '#ffffff',
                       padding: '1rem',
-                      gap: '0.75rem'
+                      gap: '0.75rem',
+                      boxSizing: 'border-box'
                     }}>
                       {(() => {
                         // Generate QR code with comprehensive item identification data
@@ -1377,7 +1367,13 @@ export default function ItemDetailsModal({
                         }
                         
                         return (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%' }}>
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            gap: '0.75rem', 
+                            height: '100%',
+                            boxSizing: 'border-box'
+                          }}>
                             {/* QR Code Image */}
                             <div style={{ 
                               display: 'flex',
@@ -1386,15 +1382,18 @@ export default function ItemDetailsModal({
                               padding: '0.75rem',
                               backgroundColor: '#ffffff',
                               borderRadius: '4px',
-                              minHeight: '160px'
+                              flex: '1 1 0',
+                              minHeight: '140px',
+                              overflow: 'visible'
                             }}>
                               <img 
                                 src={qrImageUrl}
                                 alt="QR Code"
                                 id={`qr-code-${itemId}`}
                                 style={{ 
-                                  width: '100%', 
-                                  maxWidth: '160px',
+                                  maxWidth: '100%',
+                                  maxHeight: '100%',
+                                  width: 'auto',
                                   height: 'auto',
                                   objectFit: 'contain',
                                   borderRadius: '4px'
@@ -1407,14 +1406,15 @@ export default function ItemDetailsModal({
                             
                             {/* Item Info below QR Code for identification */}
                             <div style={{
-                              padding: '0.75rem',
+                              padding: '0.5rem 0.75rem',
                               backgroundColor: '#f8f9fa',
                               borderRadius: '4px',
                               textAlign: 'center',
                               border: '1px solid #dee2e6',
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: '0.5rem'
+                              gap: '0.4rem',
+                              flexShrink: 0
                             }}>
                               <div style={{ 
                                 fontWeight: '600', 
@@ -1466,7 +1466,8 @@ export default function ItemDetailsModal({
                                 justifyContent: 'center',
                                 gap: '0.5rem',
                                 transition: 'background-color 0.2s',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                flexShrink: 0
                               }}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.backgroundColor = '#15803d'
@@ -1511,7 +1512,7 @@ export default function ItemDetailsModal({
                   Damage Resolution
                 </h4>
                 <p style={{ marginBottom: '1rem', color: '#7f1d1d', fontSize: '0.9rem' }}>
-                  This item is marked as {existingItem?.status === 'Damaged' ? 'damaged' : 'under maintenance'}. Once repairs are completed, you can mark it as available again.
+                  This item is marked as {existingItem?.status === 'Damaged' ? 'damaged' : 'under maintenance'}. Once repairs are completed, you can mark it as available by selecting "Available" from the Status dropdown above or using the button below.
                 </p>
                 {isEditMode ? (
                   <button
