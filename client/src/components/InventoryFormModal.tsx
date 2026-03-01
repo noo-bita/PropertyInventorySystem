@@ -232,8 +232,8 @@ export default function InventoryFormModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!newItem.name || !newItem.category || !newItem.location || !newItem.quantity || !newItem.available) {
-      showNotification('Please fill in all required fields (Name, Category, Location, Quantity, Available)', 'error')
+    if (!newItem.name || !newItem.category || !newItem.location || !newItem.quantity) {
+      showNotification('Please fill in all required fields (Name, Category, Location, Quantity)', 'error')
       return
     }
 
@@ -568,28 +568,6 @@ export default function InventoryFormModal({
 
               <div>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                  Available
-                </label>
-                <input 
-                  type="number" 
-                  min="0"
-                  max={newItem.quantity || 1}
-                  value={newItem.available || ''}
-                  onChange={(e) => onInputChange('available', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #ced4da',
-                    borderRadius: '4px',
-                    fontSize: '1rem',
-                    backgroundColor: '#ffffff',
-                    color: '#212529'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                   Location *
                 </label>
                 <AutocompleteInput
@@ -610,6 +588,38 @@ export default function InventoryFormModal({
                     color: '#212529'
                   }}
                 />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  Item Type
+                </label>
+                <select
+                  value={newItem.consumable === true ? 'consumable' : newItem.consumable === false ? 'reusable' : 'reusable'}
+                  onChange={(e) => handleInputChange('consumable', e.target.value === 'consumable')}
+                  disabled={isSubmitting}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #ced4da',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    backgroundColor: '#ffffff',
+                    color: '#212529'
+                  }}
+                >
+                  <option value="reusable">Reusable</option>
+                  <option value="consumable">Consumable</option>
+                </select>
+                <small style={{ 
+                  display: 'block', 
+                  marginTop: '0.25rem', 
+                  fontSize: '0.75rem', 
+                  color: '#6c757d',
+                  fontStyle: 'italic'
+                }}>
+                  Consumable items will be removed from inventory when approved for a request. Reusable items can be returned.
+                </small>
               </div>
 
               {/* Serial Numbers Input - Only show for Electronics category and non-consumable items */}
@@ -983,38 +993,6 @@ export default function InventoryFormModal({
                     Purchase date is not applicable for donated items
                   </small>
                 )}
-              </div>
-
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                  Item Type
-                </label>
-                <select
-                  value={newItem.consumable === true ? 'consumable' : newItem.consumable === false ? 'reusable' : 'reusable'}
-                  onChange={(e) => handleInputChange('consumable', e.target.value === 'consumable')}
-                  disabled={isSubmitting}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    border: '1px solid #ced4da',
-                    borderRadius: '4px',
-                    fontSize: '1rem',
-                    backgroundColor: '#ffffff',
-                    color: '#212529'
-                  }}
-                >
-                  <option value="reusable">Reusable</option>
-                  <option value="consumable">Consumable</option>
-                </select>
-                <small style={{ 
-                  display: 'block', 
-                  marginTop: '0.25rem', 
-                  fontSize: '0.75rem', 
-                  color: '#6c757d',
-                  fontStyle: 'italic'
-                }}>
-                  Consumable items will be removed from inventory when approved for a request. Reusable items can be returned.
-                </small>
               </div>
 
             <div style={{ gridColumn: '1 / -1' }}>

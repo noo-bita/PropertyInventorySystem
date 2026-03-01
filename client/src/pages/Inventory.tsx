@@ -606,7 +606,7 @@ export default function Inventory() {
          category: itemData.category,
          secondary_category: itemData.secondary_category || null,
          quantity: quantity,
-         available: parseInt(itemData.available) || 1,
+         available: parseInt(itemData.available) || quantity,
          location: itemData.location,
          description: itemData.description,
          serial_numbers: serialNumbers, // Send array of serial numbers
@@ -1408,166 +1408,189 @@ export default function Inventory() {
                                                   return (
                                                     <div className="qr-code-display">
                                                       <label>QR CODE:</label>
-                                                      <div className="qr-image-container" style={{ position: 'relative' }}>
-                                                        {(() => {
-                                                          // Use serial_number from database or serialNumber from mapped item
-                                                          const serialNum = individualItem.serialNumber || individualItem.serial_number
-                                                          const itemId = individualItem.id
-                                                          const itemName = individualItem.name || 'Unknown Item'
-                                                          const itemCategory = individualItem.category || 'General'
-                                                          const itemLocation = individualItem.location || 'Unknown'
-                                                          
-                                                          // Create structured QR data with identifying information
-                                                          const qrData = serialNum 
-                                                            ? `ITEM-${itemId}|SN:${serialNum}|${itemName}|${itemCategory}|${itemLocation}`
-                                                            : `ITEM-${itemId}|${itemName}|${itemCategory}|${itemLocation}`
-                                                          
-                                                          const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`
-                                                          
-                                                          // Download function
-                                                          const downloadQRCode = () => {
-                                                            try {
-                                                              const canvas = document.createElement('canvas')
-                                                              const ctx = canvas.getContext('2d')
-                                                              if (!ctx) return
+                                                      {(() => {
+                                                        // Use serial_number from database or serialNumber from mapped item
+                                                        const serialNum = individualItem.serialNumber || individualItem.serial_number
+                                                        const itemId = individualItem.id
+                                                        const itemName = individualItem.name || 'Unknown Item'
+                                                        const itemCategory = individualItem.category || 'General'
+                                                        const itemLocation = individualItem.location || 'Unknown'
+                                                        
+                                                        // Create structured QR data with identifying information
+                                                        const qrData = serialNum 
+                                                          ? `ITEM-${itemId}|SN:${serialNum}|${itemName}|${itemCategory}|${itemLocation}`
+                                                          : `ITEM-${itemId}|${itemName}|${itemCategory}|${itemLocation}`
+                                                        
+                                                        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`
+                                                        
+                                                        // Download function
+                                                        const downloadQRCode = () => {
+                                                          try {
+                                                            const canvas = document.createElement('canvas')
+                                                            const ctx = canvas.getContext('2d')
+                                                            if (!ctx) return
+                                                            
+                                                            canvas.width = 300
+                                                            canvas.height = 380
+                                                            
+                                                            const img = new Image()
+                                                            img.crossOrigin = 'anonymous'
+                                                            img.onload = () => {
+                                                              ctx.fillStyle = '#ffffff'
+                                                              ctx.fillRect(0, 0, canvas.width, canvas.height)
+                                                              ctx.drawImage(img, 50, 20, 200, 200)
                                                               
-                                                              canvas.width = 300
-                                                              canvas.height = 380
+                                                              ctx.fillStyle = '#000000'
+                                                              ctx.font = 'bold 14px Arial'
+                                                              ctx.textAlign = 'center'
+                                                              ctx.fillText(itemName, 150, 250)
                                                               
-                                                              const img = new Image()
-                                                              img.crossOrigin = 'anonymous'
-                                                              img.onload = () => {
-                                                                ctx.fillStyle = '#ffffff'
-                                                                ctx.fillRect(0, 0, canvas.width, canvas.height)
-                                                                ctx.drawImage(img, 50, 20, 200, 200)
-                                                                
-                                                                ctx.fillStyle = '#000000'
-                                                                ctx.font = 'bold 14px Arial'
-                                                                ctx.textAlign = 'center'
-                                                                ctx.fillText(itemName, 150, 250)
-                                                                
-                                                                if (serialNum) {
-                                                                  ctx.font = '12px Arial'
-                                                                  ctx.fillText(`SN: ${serialNum}`, 150, 275)
+                                                              if (serialNum) {
+                                                                ctx.font = '12px Arial'
+                                                                ctx.fillText(`SN: ${serialNum}`, 150, 275)
+                                                              }
+                                                              
+                                                              ctx.font = '10px Arial'
+                                                              ctx.fillText(`ID: ${itemId}`, 150, 295)
+                                                              ctx.fillText(`${itemCategory} | ${itemLocation}`, 150, 315)
+                                                              
+                                                              canvas.toBlob((blob) => {
+                                                                if (blob) {
+                                                                  const url = URL.createObjectURL(blob)
+                                                                  const link = document.createElement('a')
+                                                                  link.download = `QR-${itemName.replace(/[^a-z0-9]/gi, '_')}-${serialNum || itemId}.png`
+                                                                  link.href = url
+                                                                  link.click()
+                                                                  URL.revokeObjectURL(url)
+                                                                  showNotification('QR Code downloaded successfully!', 'success')
                                                                 }
-                                                                
-                                                                ctx.font = '10px Arial'
-                                                                ctx.fillText(`ID: ${itemId}`, 150, 295)
-                                                                ctx.fillText(`${itemCategory} | ${itemLocation}`, 150, 315)
-                                                                
-                                                                canvas.toBlob((blob) => {
-                                                                  if (blob) {
-                                                                    const url = URL.createObjectURL(blob)
-                                                                    const link = document.createElement('a')
-                                                                    link.download = `QR-${itemName.replace(/[^a-z0-9]/gi, '_')}-${serialNum || itemId}.png`
-                                                                    link.href = url
-                                                                    link.click()
-                                                                    URL.revokeObjectURL(url)
-                                                                    showNotification('QR Code downloaded successfully!', 'success')
-                                                                  }
-                                                                }, 'image/png')
-                                                              }
-                                                              img.onerror = () => {
-                                                                const link = document.createElement('a')
-                                                                link.download = `QR-${itemName.replace(/[^a-z0-9]/gi, '_')}-${serialNum || itemId}.png`
-                                                                link.href = qrImageUrl
-                                                                link.click()
-                                                                showNotification('QR Code downloaded successfully!', 'success')
-                                                              }
-                                                              img.src = qrImageUrl
-                                                            } catch (error) {
-                                                              console.error('Error downloading QR code:', error)
-                                                              showNotification('Error downloading QR code. Please try again.', 'error')
+                                                              }, 'image/png')
                                                             }
+                                                            img.onerror = () => {
+                                                              const link = document.createElement('a')
+                                                              link.download = `QR-${itemName.replace(/[^a-z0-9]/gi, '_')}-${serialNum || itemId}.png`
+                                                              link.href = qrImageUrl
+                                                              link.click()
+                                                              showNotification('QR Code downloaded successfully!', 'success')
+                                                            }
+                                                            img.src = qrImageUrl
+                                                          } catch (error) {
+                                                            console.error('Error downloading QR code:', error)
+                                                            showNotification('Error downloading QR code. Please try again.', 'error')
                                                           }
-                                                          
-                                                          return (
-                                                            <>
-                                                              <img 
-                                                                src={qrImageUrl}
-                                                                alt="QR Code"
-                                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                                                onError={(e) => {
-                                                                  e.currentTarget.style.display = 'none'
-                                                                  const placeholder = e.currentTarget.nextElementSibling
-                                                                  if (placeholder) {
-                                                                    placeholder.classList.remove('d-none')
-                                                                  }
-                                                                }}
-                                                              />
-                                                              <div className="qr-placeholder d-none" style={{
-                                                                width: '100%',
-                                                                height: '100%',
+                                                        }
+                                                        
+                                                        return (
+                                                          <>
+                                                            <div className="qr-image-container" style={{
+                                                              display: 'flex',
+                                                              flexDirection: 'column',
+                                                              justifyContent: 'space-between',
+                                                              padding: '0.75rem',
+                                                              gap: '0.5rem'
+                                                            }}>
+                                                              {/* QR Code Image */}
+                                                              <div style={{
+                                                                flex: '1 1 0',
                                                                 display: 'flex',
-                                                                flexDirection: 'column',
                                                                 alignItems: 'center',
                                                                 justifyContent: 'center',
-                                                                color: '#9ca3af',
-                                                                fontSize: '0.875rem'
+                                                                minHeight: 0,
+                                                                overflow: 'hidden'
                                                               }}>
-                                                                <i className="bi bi-qr-code" style={{ fontSize: '32px', marginBottom: '0.5rem' }}></i>
-                                                                <span>QR Code</span>
-                                                              </div>
-                                                              <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                  e.stopPropagation()
-                                                                  downloadQRCode()
-                                                                }}
-                                                                style={{
-                                                                  position: 'absolute',
-                                                                  bottom: '8px',
-                                                                  right: '8px',
-                                                                  padding: '0.375rem 0.75rem',
-                                                                  backgroundColor: '#16a34a',
-                                                                  color: 'white',
-                                                                  border: 'none',
-                                                                  borderRadius: '4px',
-                                                                  cursor: 'pointer',
-                                                                  fontSize: '0.75rem',
-                                                                  fontWeight: '600',
+                                                                <img 
+                                                                  src={qrImageUrl}
+                                                                  alt="QR Code"
+                                                                  style={{ 
+                                                                    maxWidth: '100%',
+                                                                    maxHeight: '100%',
+                                                                    width: 'auto',
+                                                                    height: 'auto',
+                                                                    objectFit: 'contain',
+                                                                    display: 'block'
+                                                                  }}
+                                                                  onError={(e) => {
+                                                                    e.currentTarget.style.display = 'none'
+                                                                    const placeholder = e.currentTarget.nextElementSibling
+                                                                    if (placeholder) {
+                                                                      placeholder.classList.remove('d-none')
+                                                                    }
+                                                                  }}
+                                                                />
+                                                                <div className="qr-placeholder d-none" style={{
+                                                                  width: '100%',
+                                                                  height: '100%',
                                                                   display: 'flex',
+                                                                  flexDirection: 'column',
                                                                   alignItems: 'center',
-                                                                  gap: '0.25rem',
-                                                                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                                                  transition: 'background-color 0.2s'
-                                                                }}
-                                                                onMouseEnter={(e) => {
-                                                                  e.currentTarget.style.backgroundColor = '#15803d'
-                                                                }}
-                                                                onMouseLeave={(e) => {
-                                                                  e.currentTarget.style.backgroundColor = '#16a34a'
-                                                                }}
-                                                                title="Download QR Code"
-                                                              >
-                                                                <i className="bi bi-download" style={{ fontSize: '0.875rem' }}></i>
-                                                                Download
-                                                              </button>
-                                                            </>
-                                                          )
-                                                        })()}
-                                                      </div>
-                                                      {/* Item Info for identification */}
-                                                      {(() => {
-                                                        const serialNum = individualItem.serialNumber || individualItem.serial_number
-                                                        return serialNum ? (
-                                                          <div style={{
-                                                            marginTop: '0.5rem',
-                                                            padding: '0.5rem',
-                                                            backgroundColor: '#f8f9fa',
-                                                            borderRadius: '4px',
-                                                            fontSize: '0.75rem',
-                                                            textAlign: 'center',
-                                                            border: '1px solid #dee2e6'
-                                                          }}>
-                                                            <div style={{ fontFamily: 'monospace', color: '#16a34a', fontWeight: '600' }}>
-                                                              SN: {serialNum}
+                                                                  justifyContent: 'center',
+                                                                  color: '#9ca3af',
+                                                                  fontSize: '0.875rem'
+                                                                }}>
+                                                                  <i className="bi bi-qr-code" style={{ fontSize: '32px', marginBottom: '0.5rem' }}></i>
+                                                                  <span>QR Code</span>
+                                                                </div>
+                                                              </div>
+                                                              
+                                                              {/* Item Info for identification */}
+                                                              {serialNum && (
+                                                                <div style={{
+                                                                  padding: '0.4rem 0.5rem',
+                                                                  backgroundColor: '#f8f9fa',
+                                                                  borderRadius: '4px',
+                                                                  fontSize: '0.7rem',
+                                                                  textAlign: 'center',
+                                                                  border: '1px solid #dee2e6',
+                                                                  flexShrink: 0
+                                                                }}>
+                                                                  <div style={{ fontFamily: 'monospace', color: '#16a34a', fontWeight: '600', fontSize: '0.65rem' }}>
+                                                                    SN: {serialNum}
+                                                                  </div>
+                                                                  <div style={{ color: '#6c757d', fontSize: '0.6rem', marginTop: '0.2rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                    {itemName}
+                                                                  </div>
+                                                                </div>
+                                                              )}
                                                             </div>
-                                                            <div style={{ color: '#6c757d', fontSize: '0.7rem', marginTop: '0.25rem' }}>
-                                                              {individualItem.name}
-                                                            </div>
-                                                          </div>
-                                                        ) : null
+                                                            
+                                                            {/* Download Button - Outside the green container */}
+                                                            <button
+                                                              type="button"
+                                                              onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                downloadQRCode()
+                                                              }}
+                                                              style={{
+                                                                width: '180px',
+                                                                marginTop: '0.5rem',
+                                                                padding: '0.5rem',
+                                                                backgroundColor: '#16a34a',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '4px',
+                                                                cursor: 'pointer',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: '600',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '0.4rem',
+                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                                                transition: 'background-color 0.2s'
+                                                              }}
+                                                              onMouseEnter={(e) => {
+                                                                e.currentTarget.style.backgroundColor = '#15803d'
+                                                              }}
+                                                              onMouseLeave={(e) => {
+                                                                e.currentTarget.style.backgroundColor = '#16a34a'
+                                                              }}
+                                                              title="Download QR Code"
+                                                            >
+                                                              <i className="bi bi-download" style={{ fontSize: '0.8rem' }}></i>
+                                                              <span>Download</span>
+                                                            </button>
+                                                          </>
+                                                        )
                                                       })()}
                                                     </div>
                                                   )

@@ -1275,9 +1275,10 @@ export default function ItemDetailsModal({
                       display: 'flex',
                       flexDirection: 'column',
                       backgroundColor: '#ffffff',
-                      padding: '1rem',
-                      gap: '0.75rem',
-                      boxSizing: 'border-box'
+                      padding: '0.75rem',
+                      gap: '0.5rem',
+                      boxSizing: 'border-box',
+                      overflow: 'hidden'
                     }}>
                       {(() => {
                         // Generate QR code with comprehensive item identification data
@@ -1366,25 +1367,30 @@ export default function ItemDetailsModal({
                           }
                         }
                         
+                        // Calculate available space: 336px - 24px (padding top+bottom) - 8px (gap) - 8px (gap) = 296px
+                        // Distribute: QR code ~200px, Info box ~60px, Button ~36px
                         return (
                           <div style={{ 
                             display: 'flex', 
                             flexDirection: 'column', 
-                            gap: '0.75rem', 
+                            gap: '0.5rem', 
                             height: '100%',
-                            boxSizing: 'border-box'
+                            boxSizing: 'border-box',
+                            minHeight: 0,
+                            overflow: 'hidden'
                           }}>
                             {/* QR Code Image */}
                             <div style={{ 
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              padding: '0.75rem',
+                              padding: '0.25rem',
                               backgroundColor: '#ffffff',
                               borderRadius: '4px',
                               flex: '1 1 0',
-                              minHeight: '140px',
-                              overflow: 'visible'
+                              minHeight: 0,
+                              maxHeight: '200px',
+                              overflow: 'hidden'
                             }}>
                               <img 
                                 src={qrImageUrl}
@@ -1396,7 +1402,8 @@ export default function ItemDetailsModal({
                                   width: 'auto',
                                   height: 'auto',
                                   objectFit: 'contain',
-                                  borderRadius: '4px'
+                                  borderRadius: '4px',
+                                  display: 'block'
                                 }}
                                 onError={(e) => {
                                   console.error('QR image failed to load:', e)
@@ -1406,23 +1413,32 @@ export default function ItemDetailsModal({
                             
                             {/* Item Info below QR Code for identification */}
                             <div style={{
-                              padding: '0.5rem 0.75rem',
+                              padding: '0.4rem 0.5rem',
                               backgroundColor: '#f8f9fa',
                               borderRadius: '4px',
                               textAlign: 'center',
                               border: '1px solid #dee2e6',
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: '0.4rem',
-                              flexShrink: 0
+                              gap: '0.25rem',
+                              flexShrink: 0,
+                              height: '60px',
+                              overflow: 'hidden',
+                              justifyContent: 'center'
                             }}>
                               <div style={{ 
                                 fontWeight: '600', 
                                 color: '#212529',
-                                fontSize: '0.8rem',
-                                lineHeight: '1.3',
+                                fontSize: '0.7rem',
+                                lineHeight: '1.1',
                                 wordWrap: 'break-word',
-                                overflowWrap: 'break-word'
+                                overflowWrap: 'break-word',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 1,
+                                WebkitBoxOrient: 'vertical',
+                                margin: 0
                               }}>
                                 {itemName}
                               </div>
@@ -1431,20 +1447,16 @@ export default function ItemDetailsModal({
                                   fontFamily: 'monospace', 
                                   color: '#16a34a', 
                                   fontWeight: '600',
-                                  fontSize: '0.75rem',
-                                  letterSpacing: '0.5px'
+                                  fontSize: '0.65rem',
+                                  letterSpacing: '0.5px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  margin: 0
                                 }}>
                                   SN: {serialNum}
                                 </div>
                               )}
-                              <div style={{ 
-                                color: '#6c757d', 
-                                fontSize: '0.7rem',
-                                lineHeight: '1.4'
-                              }}>
-                                <div>ID: {itemId}</div>
-                                <div>{itemCategory}</div>
-                              </div>
                             </div>
                             
                             {/* Download Button */}
@@ -1453,21 +1465,23 @@ export default function ItemDetailsModal({
                               onClick={downloadQRCode}
                               style={{
                                 width: '100%',
-                                padding: '0.625rem',
+                                padding: '0.45rem',
                                 backgroundColor: '#16a34a',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '4px',
                                 cursor: 'pointer',
-                                fontSize: '0.875rem',
+                                fontSize: '0.75rem',
                                 fontWeight: '600',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '0.5rem',
+                                gap: '0.35rem',
                                 transition: 'background-color 0.2s',
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                flexShrink: 0
+                                flexShrink: 0,
+                                height: '36px',
+                                margin: 0
                               }}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.backgroundColor = '#15803d'
@@ -1478,8 +1492,8 @@ export default function ItemDetailsModal({
                                 e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'
                               }}
                             >
-                              <i className="bi bi-download"></i>
-                              Download QR Code
+                              <i className="bi bi-download" style={{ fontSize: '0.85rem' }}></i>
+                              <span>Download</span>
                             </button>
                           </div>
                         )

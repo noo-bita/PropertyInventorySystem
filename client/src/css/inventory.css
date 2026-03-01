@@ -1773,16 +1773,30 @@
   margin: 0;
 }
 
-.inventory-table .photo-display,
-.inventory-table .qr-image-container {
-  width: 120px;
-  height: 120px;
+.inventory-table .photo-display {
+  width: 180px;
+  height: 180px;
   border: 2px dashed #cbd5e1;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: #f8fafc;
+}
+
+.inventory-table .qr-image-container {
+  width: 180px;
+  height: 180px;
+  border: 2px solid #16a34a;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #ffffff;
+  position: relative;
+  overflow: hidden;
+  padding: 0.5rem;
+  box-sizing: border-box;
 }
 
 .inventory-table .photo-placeholder,
